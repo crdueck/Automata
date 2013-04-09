@@ -6,23 +6,8 @@ import Graphics.UI.GLUT
 data Model = Model
     { mPosition :: {-# UNPACK #-} !(Vector3 GLfloat)
     , mRotation :: {-# UNPACK #-} !(Vector3 GLfloat)
+    , mZoom     :: {-# UNPACK #-} !(Vector3 GLfloat)
     }
-
-mkVert2 :: (GLfloat, GLfloat) -> IO ()
-mkVert2 (x, y) = vertex $ Vertex2 x y
-
-mkVert3 :: (GLfloat, GLfloat, GLfloat) -> IO ()
-mkVert3 (x, y, z) = vertex $ Vertex3 x y z
-
-tile :: (GLfloat, GLfloat) -> IO ()
-tile (x, y) = do
-    clear [DepthBuffer, ColorBuffer]
-    loadIdentity
-    color stone
-    let verts = [(x-n, y-n), (x+n, y-n), (x+n, y+n), (x-n, y+n)]
-        n = 0.25
-    renderPrimitive Quads $ mapM_ mkVert2 verts
-    swapBuffers
 
 cube :: (GLfloat, GLfloat, GLfloat) -> IO ()
 cube (x, y, z) = do
@@ -33,13 +18,36 @@ cube (x, y, z) = do
     renderObject Solid (Cube 1.0)
     swapBuffers
 
-display :: Model -> DisplayCallback
-display model = do
-    matrixMode $= Projection
-    translate $ mPosition model
-    rotate 20 $ Vector3 1 0 (1 :: GLfloat)
-    cube (0.0, 0.0, 0.0)
-    matrixMode $= Modelview 0
+chooseTexture :: (Eq a, Num a) => a -> IO ()
+chooseTexture 0 = color stone
+chooseTexture _ = color grass
+
+renderCube (x, y, z) w = do
+    chooseTexture w
+    renderObject Solid (Cube 0.2)
+
+renderTile ((x', y'), w) = do
+    chooseTexture w
+    renderPrimitive Quads $ mapM_ vertex
+        [ Vertex2 (x-n) (y-n), Vertex2 (x+n) (y-n)
+        , Vertex2 (x+n) (y+n), Vertex2 (x-n) (y+n)]
+    where n = 0.8 :: GLfloat
+          x = fromIntegral x'
+          y = fromIntegral y'
+
+display angle xs = do
+    clear [DepthBuffer, ColorBuffer]
+    loadIdentity
+    let pos = Vertex3 0 0 (10 :: GLdouble)
+        aim = Vertex3 0 0 (0 :: GLdouble)
+        upv = Vector3 0 1 (0 :: GLdouble)
+    lookAt pos aim upv
+    (x, y) <- get angle
+    rotate x $ Vector3 1.0 0.0 0.0
+    rotate y $ Vector3 0.0 1.0 0.0
+    {-scale 0.05 0.05 (0.05 :: GLfloat)-}
+    preservingMatrix $ mapM_ renderTile xs
+    swapBuffers
 
 grass :: Color3 GLfloat
 grass = Color3 0.0 0.7 0.0
@@ -47,16 +55,15 @@ grass = Color3 0.0 0.7 0.0
 stone :: Color3 GLfloat
 stone = Color3 0.2 0.2 0.2
 
-reshape s = do
-    viewport   $= (Position 0 0, s)
-    matrixMode $= Projection
-    loadIdentity
-    ortho (-2.0) 1.0 (-1.0) 1.0 (-1.0) 1.0
-    matrixMode $= Modelview 0
+reshape s = viewport $= (Position 0 0, s)
 
-{-display :: [((Int, Int), Word8)] -> IO ()-}
-{-display iws = do-}
-    {-clear [ColorBuffer, DepthBuffer]-}
-    {-loadIdentity-}
-    {-mapM_ (\((x, y), w) -> chooseColor w >> tile x y) iws-}
-    {-swapBuffers-}
+keyboardMouse angle key state modifiers position = do
+    (x, y) <- get angle
+    if state == Down
+        then case key of
+            Char 'h' -> angle $= (x + 0.5, y)
+            Char 'l' -> angle $= (x - 0.5, y)
+            Char 'j' -> angle $= (x, y + 0.5)
+            Char 'k' -> angle $= (x, y - 0.5)
+            _        -> return ()
+        else return ()

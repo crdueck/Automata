@@ -1,5 +1,5 @@
 GHC=ghc
-FLAGS=-O2 -fllvm -optlo-O3 -fno-liberate-case
+FLAGS=-O2 -fllvm -optlo-O3 -fno-liberate-case -funbox-strict-fields
 PROF=-prof -auto-all
 GLUT=-package GLUT
 TARGET=Automata
@@ -10,8 +10,7 @@ automata:
 	$(GHC) $(FLAGS) $(GLUT) $(TARGET).hs
 
 prof: automata
-	$(GHC) $(PROF) -osuf $(TARGET).o $(TARGET).hs;
-	./$(TARGET) +RTS -p -hy && hp2ps -e8in -c $(TARGET).hp
+	./$(TARGET) +RTS -s
 
 clean:
 	rm -rf *.hi *.o *.prof *.dump-simpl *.aux *.hp *.ps $(TARGET)
