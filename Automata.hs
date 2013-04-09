@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE BangPatterns, QuasiQuotes #-}
 
 import Data.Array.Repa (Array, DIM2, U, Z(..), (:.)(..))
 import qualified Data.Array.Repa as R
@@ -9,34 +9,40 @@ import Data.Word (Word8)
 import System.Random
 
 import Bindings
-import Data.IORef
 import Graphics.UI.GLUT
 
-type SubGrid = Array U DIM2 Word8
-type Grid = Array C DIM2 SubGrid
+type SubGrid = Array U DIM2
+type Grid a  = Array C DIM2 (SubGrid a)
 
-worldGen :: DIM2 -> StdGen -> Grid
+sten1 :: Stencil DIM2 Word8
+sten1 = [stencil2| 1 1 1
+                   1 0 1
+                   1 1 1 |]
+
+worldGen :: DIM2 -> StdGen -> Grid Word8
 worldGen sh@(Z :. x :. y) g = makeCursored (R.ix2 8 8) id R.addDim (R.computeUnboxedS . sub)
     where sub (Z :. i :. j) = R.extract (R.ix2 (i * 8) (j * 8)) (R.ix2 xSz ySz) delayed
           delayed = R.delay $ subGen sh g
           xSz = x `quot` 8
           ySz = y `quot` 8
 
-subGen :: DIM2 -> StdGen -> SubGrid
+subGen :: DIM2 -> StdGen -> SubGrid Word8
 subGen sh@(Z :. x :. y) = steps . world
     where steps = iterStep . iterStep . iterStep
           world = R.fromListUnboxed sh . take (x * y) . randomRs (0,1)
 
-step :: (Word8 -> Word8 -> Word8) -> Stencil DIM2 Word8 -> SubGrid -> SubGrid
+type BinaryOp a = a -> a -> a
+
+step :: BinaryOp Word8 -> Stencil DIM2 Word8 -> SubGrid Word8 -> SubGrid Word8
 step transit sten grid = R.computeUnboxedS $ R.zipWith transit grid appSten
     where appSten = mapStencil2 (BoundConst 1) sten grid
 
-iterStep :: SubGrid -> SubGrid
-iterStep = step transit [stencil2| 1 1 1 1 0 1 1 1 1 |]
+iterStep :: SubGrid Word8 -> SubGrid Word8
+iterStep = step transit sten1
     where transit 0 n = if n > 4 then 1 else 0
           transit _ n = if n > 3 then 1 else 0
 
-text :: SubGrid -> IO ()
+text :: SubGrid Word8 -> IO ()
 text grid = mapM_ (print . R.toList . R.map ascii . row) [0..nRows - 1]
     where row :: Int -> Array R.D R.DIM1 Word8
           row i = R.slice grid $ R.Any :. i :. R.All
@@ -46,15 +52,26 @@ text grid = mapM_ (print . R.toList . R.map ascii . row) [0..nRows - 1]
 
 main :: IO ()
 
-main = text . subGen (R.ix2 50 100) $ mkStdGen 10
+main = newStdGen >>= text . subGen (R.ix2 50 100)
 
-{-main = newStdGen >>= mapM_ text . R.toList . worldGen (R.ix2 500 1000)-}
+{-main = newStdGen >>= mapM_ text . R.toList . worldGen (R.ix2 200 400)-}
 
 {-main = do-}
     {-getArgsAndInitialize-}
     {-initialDisplayMode $= [WithDepthBuffer, DoubleBuffered]-}
-    {-world <- fmap (subGen (R.ix2 70 150)) newStdGen-}
+    {-initialWindowSize  $= Size 1080 720-}
     {-createWindow "Automata"-}
-    {-displayCallback $= display [1]-}
+
+    {-lighting $= Enabled-}
+    {-position (Light 0) $= Vertex4 1 0.4 0.8 1-}
+    {-light (Light 0) $= Enabled-}
+
+    {-let position = Vector3 0 0 0-}
+        {-rotation = Vector3 1 0 0-}
+        {-model = Model position rotation-}
+
+    {-displayCallback $= display model-}
+    {-reshapeCallback $= Just reshape-}
     {-depthFunc       $= Just Less-}
+
     {-mainLoop-}

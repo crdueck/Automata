@@ -1,51 +1,62 @@
 module Bindings where
 
-import Data.IORef
-import Data.Word
 import Graphics.Rendering.OpenGL
 import Graphics.UI.GLUT
 
-mkVert2 :: (Float, Float) -> IO ()
+data Model = Model
+    { mPosition :: {-# UNPACK #-} !(Vector3 GLfloat)
+    , mRotation :: {-# UNPACK #-} !(Vector3 GLfloat)
+    }
+
+mkVert2 :: (GLfloat, GLfloat) -> IO ()
 mkVert2 (x, y) = vertex $ Vertex2 x y
 
-mkVert3 :: (Float, Float, Float) -> IO ()
+mkVert3 :: (GLfloat, GLfloat, GLfloat) -> IO ()
 mkVert3 (x, y, z) = vertex $ Vertex3 x y z
 
-tile :: Float -> IO ()
-tile w = renderPrimitive Quads $
-    mapM_ mkVert2 [(w, w), (w,-w), (-w,-w), (-w,w)]
-
-cube :: Float -> IO ()
-cube w = renderPrimitive Quads $ mapM_ mkVert3
-    [ ( w, w, w), ( w, w,-w), ( w,-w,-w), ( w,-w, w)
-    , ( w, w, w), ( w, w,-w), (-w, w,-w), (-w, w, w)
-    , ( w, w, w), ( w,-w, w), (-w,-w, w), (-w, w, w)
-    , (-w, w, w), (-w, w,-w), (-w,-w,-w), (-w,-w, w)
-    , ( w,-w, w), ( w,-w,-w), (-w,-w,-w), (-w,-w, w)
-    , ( w, w,-w), ( w,-w,-w), (-w,-w,-w), (-w, w,-w) ]
-
-cubeFrame :: Float -> IO ()
-cubeFrame w = renderPrimitive Lines $ mapM_ mkVert3
-    [ ( w,-w, w), ( w, w, w), ( w, w, w), (-w, w, w)
-    , (-w, w, w), (-w,-w, w), (-w,-w, w), ( w,-w, w)
-    , ( w,-w, w), ( w,-w,-w), ( w, w, w), ( w, w,-w)
-    , (-w, w, w), (-w, w,-w), (-w,-w, w), (-w,-w,-w)
-    , ( w,-w,-w), ( w, w,-w), ( w, w,-w), (-w, w,-w)
-    , (-w, w,-w), (-w,-w,-w), (-w,-w,-w), ( w,-w,-w) ]
-
-grass :: Color3 Float
-grass = Color3 0.0 10.0 0.0
-
-stone :: Color3 Float
-stone = Color3 3.0 3.0 3.0
-
-chooseColor :: Word8 -> IO ()
-chooseColor 0 = color grass
-chooseColor _ = color stone
-
-display :: [Word8] -> IO ()
-display ws = do
-    clear [ColorBuffer, DepthBuffer]
+tile :: (GLfloat, GLfloat) -> IO ()
+tile (x, y) = do
+    clear [DepthBuffer, ColorBuffer]
     loadIdentity
-    mapM_ (\w -> chooseColor w >> tile (fromIntegral w)) ws
+    color stone
+    let verts = [(x-n, y-n), (x+n, y-n), (x+n, y+n), (x-n, y+n)]
+        n = 0.25
+    renderPrimitive Quads $ mapM_ mkVert2 verts
     swapBuffers
+
+cube :: (GLfloat, GLfloat, GLfloat) -> IO ()
+cube (x, y, z) = do
+    clear [DepthBuffer, ColorBuffer]
+    loadIdentity
+    translate $ Vector3 x y z
+    color stone
+    renderObject Solid (Cube 1.0)
+    swapBuffers
+
+display :: Model -> DisplayCallback
+display model = do
+    matrixMode $= Projection
+    translate $ mPosition model
+    rotate 20 $ Vector3 1 0 (1 :: GLfloat)
+    cube (0.0, 0.0, 0.0)
+    matrixMode $= Modelview 0
+
+grass :: Color3 GLfloat
+grass = Color3 0.0 0.7 0.0
+
+stone :: Color3 GLfloat
+stone = Color3 0.2 0.2 0.2
+
+reshape s = do
+    viewport   $= (Position 0 0, s)
+    matrixMode $= Projection
+    loadIdentity
+    ortho (-2.0) 1.0 (-1.0) 1.0 (-1.0) 1.0
+    matrixMode $= Modelview 0
+
+{-display :: [((Int, Int), Word8)] -> IO ()-}
+{-display iws = do-}
+    {-clear [ColorBuffer, DepthBuffer]-}
+    {-loadIdentity-}
+    {-mapM_ (\((x, y), w) -> chooseColor w >> tile x y) iws-}
+    {-swapBuffers-}
