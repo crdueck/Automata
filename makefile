@@ -1,16 +1,20 @@
 GHC=ghc
-FLAGS=-O2 -fllvm -optlo-O3 -fno-liberate-case -funbox-strict-fields
+FLAGS=-O2 -fllvm -optlo-O3 -funbox-strict-fields -fexcess-precision
 PROF=-prof -auto-all
 GLUT=-package GLUT
-TARGET=Automata
+TARGET=Simplex
 
-all: automata
+all: target
 
-automata:
-	$(GHC) $(FLAGS) $(GLUT) $(TARGET).hs
+target:
+	$(GHC) $(FLAGS) $(TARGET).hs
 
-prof: automata
+time: target
 	./$(TARGET) +RTS -s
+
+prof:
+	$(GHC) $(FLAGS) $(PROF) $(TARGET).hs
+	./$(TARGET) +RTS -p -hy && hp2ps -e8in -c $(TARGET).hp
 
 clean:
 	rm -rf *.hi *.o *.prof *.dump-simpl *.aux *.hp *.ps $(TARGET)
