@@ -6,7 +6,11 @@ TARGET=Simplex
 
 all: target
 
+<<<<<<< HEAD
 target:
+=======
+automata:
+>>>>>>> a9a449adff11748710caba250fa6e87fbaf0f751
 	$(GHC) $(FLAGS) $(TARGET).hs
 
 time: target
