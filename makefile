@@ -7,7 +7,7 @@ TARGET=Automata
 all: automata
 
 automata:
-	$(GHC) $(FLAGS) $(GLUT) $(TARGET).hs
+	$(GHC) $(FLAGS) $(TARGET).hs
 
 prof: automata
 	./$(TARGET) +RTS -s

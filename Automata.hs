@@ -28,7 +28,7 @@ worldGen sh@(Z :. x :. y) g = makeCursored (R.ix2 8 8) id R.addDim (R.computeUnb
 
 subGen :: DIM2 -> StdGen -> SubGrid Word8
 subGen sh@(Z :. x :. y) = steps . world
-    where steps = iterStep . iterStep -- . iterStep
+    where steps = iterStep . iterStep . iterStep
           world = R.fromListUnboxed sh . take (x * y) . randomRs (0,1)
 
 type BinaryOp a = a -> a -> a
@@ -52,7 +52,7 @@ text grid = mapM_ (print . R.toList . R.map ascii . row) [0..nRows - 1]
 
 {-main :: IO ()-}
 
-{-main = newStdGen >>= text . subGen (R.ix2 50 100)-}
+main = newStdGen >>= text . subGen (R.ix2 50 100)
 {-main = newStdGen >>= mapM_ text . R.toList . worldGen (R.ix2 200 400)-}
 
 {-main = do-}
