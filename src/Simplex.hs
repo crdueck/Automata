@@ -1,12 +1,20 @@
-module Simplex (simplex2D, simplex2D', simplex3D, simplex3D') where
+module Simplex (harmonic3D, harmonic2D, simplex2D, simplex2D', simplex3D, simplex3D') where
 import Data.Bits
 import qualified Data.Vector.Unboxed as U
 
+harmonic2D :: Int -> Float -> Float -> Float -> Float
+harmonic2D 0 _ _ _ = 0
+harmonic2D octave freq x y = go octave / (2 - 1 / i2f (1 `shiftL` (octave - 1)))
+    where noise i = simplex2D (x * i / freq) (y * i / freq)
+          go 0 = 0
+          go o = let r = i2f (1 `shiftL` (o - 1)) in noise r / r + go (o - 1)
+
 harmonic3D :: Int -> Float -> Float -> Float -> Float -> Float
-harmonic3D octave freq x y z = go octave / (2 - 1 / i2f (2 ^ (octave - 1)))
+harmonic3D 0 _ _ _ _ = 0
+harmonic3D octave freq x y z = go octave / (2 - 1 / i2f (1 `shiftL` (octave - 1)))
     where noise i = simplex3D (x * i / freq) (y * i / freq) (z * i / freq)
           go 0 = 0
-          go o = let r = 2 ^^ (o - 1) in noise r / r + go (o - 1)
+          go o = let r = i2f (1 `shiftL` (o - 1)) in noise r / r + go (o - 1)
 
 simplex2D :: Float -> Float -> Float
 {-# INLINE simplex2D #-}

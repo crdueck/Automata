@@ -38,10 +38,6 @@ renderTile ((x', y'), w) = do
 display angle xs = do
     clear [DepthBuffer, ColorBuffer]
     loadIdentity
-    {-let pos = Vertex3 0 0 (10 :: GLdouble)-}
-        {-aim = Vertex3 0 0 (0 :: GLdouble)-}
-        {-upv = Vector3 0 1 (0 :: GLdouble)-}
-    {-lookAt pos aim upv-}
     (x, y) <- get angle
     rotate x $ Vector3 1.0 0.0 0.0
     rotate y $ Vector3 0.0 1.0 0.0

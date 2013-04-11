@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 import Data.Array.Repa (Array, DIM2, DIM3, U, Z(..), (:.)(..))
 import qualified Data.Array.Repa as R
@@ -50,8 +50,7 @@ text grid = mapM_ (print . R.toList . R.map ascii . row) [0..nRows - 1]
           ascii _ = '#'
           nRows = case R.extent grid of Z :. x :. _ -> x
 
-{-main :: IO ()-}
-
+main :: IO ()
 main = newStdGen >>= text . subGen (R.ix2 50 100)
 {-main = newStdGen >>= mapM_ text . R.toList . worldGen (R.ix2 200 400)-}
 
