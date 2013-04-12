@@ -1,72 +1,77 @@
-{-# LANGUAGE QuasiQuotes #-}
-
-import Data.Array.Repa (Array, DIM2, DIM3, U, Z(..), (:.)(..))
-import qualified Data.Array.Repa as R
-import Data.Array.Repa.Repr.Cursored (C, makeCursored)
-import Data.Array.Repa.Stencil (Stencil, Boundary(..))
-import Data.Array.Repa.Stencil.Dim2 (stencil2, makeStencil2, mapStencil2)
-import Data.Word (Word8)
-import System.Random
+{-# LANGUAGE FlexibleContexts #-}
 
 import Bindings
+import Control.Monad
+import Data.Array.Repa
+import Data.Array.Repa.Repr.Cursored
 import Data.IORef
-import Graphics.UI.GLUT
+import Graphics.Rendering.OpenGL hiding (index)
+import Graphics.UI.GLUT hiding (index)
+import Simplex
 
-type SubGrid = Array U DIM2
-type Grid a  = Array C DIM2 (SubGrid a)
+type Region a = Array U DIM3 a
+type World  a = Array C DIM3 (Region a)
 
-sten1 :: Stencil DIM2 Word8
-sten1 = [stencil2| 1 1 1
-                   1 0 1
-                   1 1 1 |]
+type HeightMap = Array D DIM2 Float
 
-worldGen :: DIM2 -> StdGen -> Grid Word8
-worldGen sh@(Z :. x :. y) g = makeCursored (R.ix2 8 8) id R.addDim (R.computeUnboxedS . sub)
-    where sub (Z :. i :. j) = R.extract (R.ix2 (i * 8) (j * 8)) (R.ix2 xSz ySz) $ subGen sh g
-          xSz = x `quot` 8
-          ySz = y `quot` 8
+f2GLf :: Float -> GLfloat
+f2GLf = realToFrac
 
-subGen :: DIM2 -> StdGen -> SubGrid Word8
-subGen sh@(Z :. x :. y) = steps . world
-    where steps = iterStep . iterStep . iterStep
-          world = R.fromListUnboxed sh . take (x * y) . randomRs (0,1)
+i2GLf :: Int -> GLfloat
+i2GLf = fromIntegral
 
-type BinaryOp a = a -> a -> a
+i2f :: Int -> Float
+i2f = fromIntegral
 
-step :: BinaryOp Word8 -> Stencil DIM2 Word8 -> SubGrid Word8 -> SubGrid Word8
-step transit sten grid = R.computeUnboxedS $ R.zipWith transit grid appSten
-    where appSten = mapStencil2 (BoundConst 1) sten grid
+worldGen :: DIM3 -> World Float
+worldGen sh = makeCursored sh id addDim (computeUnboxedS . getRegion)
+    where getRegion (Z :. i :. j :. k) =
+              let start = Z :. i - 64 :. j - 64 :. k - 32
+                  end   = Z :. i + 64 :. j + 64 :. k + 32
+              in extract start end world
+          world = noise 3 4 +^ noise 2 10 +^ noise 2 14
+          noise octave freq = fromFunction sh $ \(Z :. x :. y :. z) ->
+              harmonic3D octave freq (i2f x) (i2f y) (i2f z)
 
-iterStep :: SubGrid Word8 -> SubGrid Word8
-iterStep = step transit sten1
-    where transit 0 n = if n > 4 then 1 else 0
-          transit _ n = if n > 3 then 1 else 0
+heightMap :: DIM2 -> HeightMap
+heightMap sh = noise 3 20 +^ noise 3 3 +^ noise 3 6
+    where noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
+              harmonic2D octave freq (i2f x) (i2f y)
 
-text :: SubGrid Word8 -> IO ()
-text grid = mapM_ (print . R.toList . R.map ascii . row) [0..nRows - 1]
-    where row :: Int -> Array R.D R.DIM1 Word8
-          row i = R.slice grid $ R.Any :. i :. R.All
-          ascii 0 = '.'
-          ascii _ = '#'
-          nRows = case R.extent grid of Z :. x :. _ -> x
+_STRIDE :: Int
+_STRIDE = 2
 
-main :: IO ()
-main = newStdGen >>= text . subGen (R.ix2 50 100)
-{-main = newStdGen >>= mapM_ text . R.toList . worldGen (R.ix2 200 400)-}
+renderHeightMap :: HeightMap -> IO ()
+renderHeightMap arr = do
+    let Z :. x :. y = extent arr
+    forM_ [0,_STRIDE..x] $ \i ->
+        forM_ [0,_STRIDE..y] $ \j -> do
+            renderVertex  i             j
+            renderVertex  i            (j + _STRIDE)
+            renderVertex (i + _STRIDE) (j + _STRIDE)
+            renderVertex (i + _STRIDE)  j
+    where renderVertex i j = do
+              let h = f2GLf . max 0 $ index arr (ix2 i j)
+              color  $ Color3 0 0 h
+              vertex $ Vertex3 (i2GLf i) (10 * h) (i2GLf j)
+
+main = print $ sumAllS $ heightMap (ix2 512 512)
 
 {-main = do-}
     {-getArgsAndInitialize-}
-    {-initialDisplayMode $= [WithDepthBuffer, DoubleBuffered, RGBMode]-}
-    {-initialWindowSize  $= Size 600 600-}
+    {-initialDisplayMode $= [WithDepthBuffer, DoubleBuffered]-}
+    {-initialWindowSize  $= Size 1080 720-}
     {-createWindow "Automata"-}
 
-    {-seed  <- newStdGen-}
-    {-angle <- newIORef ((0, 0) :: (GLfloat, GLfloat))-}
+    {-zoom     <- newIORef (0.01   ::  GLfloat)-}
+    {-angle    <- newIORef ((-20, 5) :: (GLfloat, GLfloat))-}
+    {-position <- newIORef ((-0.8, -0.5) :: (GLfloat, GLfloat))-}
 
-    {-let world   = subGen (R.ix2 50 100) seed-}
-        {-indexed = R.traverse world id (\f i@(Z :. x :. y) -> ((x, y), f i))-}
+    {-let hMap = heightMap $ ix2 256 256-}
 
-    {-displayCallback       $= display angle (R.toList indexed)-}
-    {-keyboardMouseCallback $= Nothing-}
+    {-displayCallback       $= display angle position zoom (renderHeightMap hMap)-}
+    {-keyboardMouseCallback $= Just (keyboardMouse angle position zoom)-}
+    {-idleCallback          $= Just (postRedisplay Nothing)-}
+    {-reshapeCallback       $= Just (\s -> viewport $= (Position 0 0, s))-}
     {-depthFunc             $= Just Less-}
     {-mainLoop-}
