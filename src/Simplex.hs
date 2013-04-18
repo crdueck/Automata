@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Simplex
     ( harmonic2D
     , simplex2D
@@ -9,6 +11,7 @@ module Simplex
     , simplex4D
     , simplex4D'
     ) where
+
 import Data.Bits ((.&.), shiftL)
 import Data.Word (Word8)
 import qualified Data.Vector.Unboxed as U
@@ -53,13 +56,13 @@ simplex2D' p x y = 70 * (n gi0 xy0 + n gi1 xy1 + n gi2 xy2)
 
           (ii, jj) = (i .&. 255, j .&. 255)
 
-          gi0 = (p ! (ii + 0  + w2i (p ! (jj + 0 )))) `rem` 12
-          gi1 = (p ! (ii + i0 + w2i (p ! (jj + j0)))) `rem` 12
-          gi2 = (p ! (ii + 1  + w2i (p ! (jj + 1 )))) `rem` 12
+          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0 )))) `rem` 12
+          !gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0)))) `rem` 12
+          !gi2 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1 )))) `rem` 12
 
-          n gi (a, b) =
+          n gi xy@(a, b) =
             let s = 0.5 - a*a - b*b
-            in if s < 0 then 0 else (s*s*s*s) * dot3D (grad3D ! w2i gi) (a, b, 0)
+            in if s < 0 then 0 else (s*s*s*s) * dot2D (grad3D `U.unsafeIndex` w2i gi) xy
 
 simplex3D :: Float -> Float -> Float -> Float
 {-# INLINE simplex3D #-}
@@ -89,14 +92,14 @@ simplex3D' p x y z = 32 * (n gi0 xyz0 + n gi1 xyz1 + n gi2 xyz2 + n gi3 xyz3)
 
           (ii, jj, kk) = (i .&. 255, j .&. 255, k .&. 255)
 
-          gi0 = (p ! (ii + 0  + w2i (p ! (jj + 0  + w2i (p ! (kk + 0 )))))) `rem` 12
-          gi1 = (p ! (ii + i0 + w2i (p ! (jj + j0 + w2i (p ! (kk + k0)))))) `rem` 12
-          gi2 = (p ! (ii + i1 + w2i (p ! (jj + j1 + w2i (p ! (kk + k1)))))) `rem` 12
-          gi3 = (p ! (ii + 1  + w2i (p ! (jj + 1  + w2i (p ! (kk + 1 )))))) `rem` 12
+          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0 )))))) `rem` 12
+          !gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0 + w2i (p `U.unsafeIndex` (kk + k0)))))) `rem` 12
+          !gi2 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1)))))) `rem` 12
+          !gi3 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1 )))))) `rem` 12
 
           n gi xyz@(a, b, c) =
               let s = 0.5 - a*a - b*b - c*c
-              in if s < 0 then 0 else (s*s*s*s) * dot3D (grad3D ! w2i gi) xyz
+              in if s < 0 then 0 else (s*s*s*s) * dot3D (grad3D `U.unsafeIndex` w2i gi) xyz
 
 simplex4D :: Float -> Float -> Float -> Float -> Float
 {-# INLINE simplex4D #-}
@@ -119,9 +122,9 @@ simplex4D' p x y z w = 27 * (n gi0 xyzw0 + n gi1 xyzw1 + n gi2 xyzw2 + n gi3 xyz
           o  = o1 + o2 + o3 + o4 + o5 + o6
 
           a `gt` b = if a >= b then 1 else 0
-          (i1, j1, k1, l1) = let (a, b, c, d) = simplex ! o in (a `gt` 3, b `gt` 3, c `gt` 3, d `gt` 3)
-          (i2, j2, k2, l2) = let (a, b, c, d) = simplex ! o in (a `gt` 2, b `gt` 2, c `gt` 2, d `gt` 2)
-          (i3, j3, k3, l3) = let (a, b, c, d) = simplex ! o in (a `gt` 1, b `gt` 1, c `gt` 1, d `gt` 1)
+          (i1, j1, k1, l1) = let (a, b, c, d) = simplex `U.unsafeIndex` o in (a `gt` 3, b `gt` 3, c `gt` 3, d `gt` 3)
+          (i2, j2, k2, l2) = let (a, b, c, d) = simplex `U.unsafeIndex` o in (a `gt` 2, b `gt` 2, c `gt` 2, d `gt` 2)
+          (i3, j3, k3, l3) = let (a, b, c, d) = simplex `U.unsafeIndex` o in (a `gt` 1, b `gt` 1, c `gt` 1, d `gt` 1)
 
           xyzw1 = (x0 - i2f i1 + 1 * t, y0 - i2f j1 + 1 * t, z0 - i2f k1 + 1 * t, w0 - i2f l1 + 1 * t)
           xyzw2 = (x0 - i2f i2 + 2 * t, y0 - i2f j2 + 2 * t, z0 - i2f k2 + 2 * t, w0 - i2f l2 + 2 * t)
@@ -130,19 +133,15 @@ simplex4D' p x y z w = 27 * (n gi0 xyzw0 + n gi1 xyzw1 + n gi2 xyzw2 + n gi3 xyz
 
           (ii, jj, kk, ll) = (i .&. 255, j .&. 255, k .&. 255, l .&. 255)
 
-          gi0 = (p ! (ii + 0  + w2i (p ! (jj + 0  + w2i (p ! (kk + 0  + w2i (p ! (ll + 0 )))))))) `rem` 32
-          gi1 = (p ! (ii + i1 + w2i (p ! (jj + j1 + w2i (p ! (kk + k1 + w2i (p ! (ll + l1)))))))) `rem` 32
-          gi2 = (p ! (ii + i2 + w2i (p ! (jj + j2 + w2i (p ! (kk + k2 + w2i (p ! (ll + l2)))))))) `rem` 32
-          gi3 = (p ! (ii + i3 + w2i (p ! (jj + j3 + w2i (p ! (kk + k3 + w2i (p ! (ll + l3)))))))) `rem` 32
-          gi4 = (p ! (ii + 1  + w2i (p ! (jj + 1  + w2i (p ! (kk + 1  + w2i (p ! (ll + 1 )))))))) `rem` 32
+          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0  + w2i (p `U.unsafeIndex` (ll + 0 )))))))) `rem` 32
+          !gi1 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1 + w2i (p `U.unsafeIndex` (ll + l1)))))))) `rem` 32
+          !gi2 = (p `U.unsafeIndex` (ii + i2 + w2i (p `U.unsafeIndex` (jj + j2 + w2i (p `U.unsafeIndex` (kk + k2 + w2i (p `U.unsafeIndex` (ll + l2)))))))) `rem` 32
+          !gi3 = (p `U.unsafeIndex` (ii + i3 + w2i (p `U.unsafeIndex` (jj + j3 + w2i (p `U.unsafeIndex` (kk + k3 + w2i (p `U.unsafeIndex` (ll + l3)))))))) `rem` 32
+          !gi4 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1  + w2i (p `U.unsafeIndex` (ll + 1 )))))))) `rem` 32
 
           n gi xyzw@(a, b, c, d) =
               let s = 0.5 - a*a - b*b - c*c - d*d
-              in if s < 0 then 0 else (s*s*s*s) * dot4D (grad4D ! w2i gi) xyzw
-
-(!) :: U.Unbox a => U.Vector a -> Int -> a
-{-# INLINE (!) #-}
-(!) = U.unsafeIndex
+              in if s < 0 then 0 else (s*s*s*s) * dot4D (grad4D `U.unsafeIndex` w2i gi) xyzw
 
 w2i :: Word8 -> Int
 {-# INLINE w2i #-}
@@ -151,6 +150,10 @@ w2i = fromIntegral
 i2f :: Int -> Float
 {-# INLINE i2f #-}
 i2f = fromIntegral
+
+dot2D :: (Float, Float, Float) -> (Float, Float) -> Float
+{-# INLINE dot2D #-}
+dot2D (a, b, _) (x, y) = a * x + b * y
 
 dot3D :: (Float, Float, Float) -> (Float, Float, Float) -> Float
 {-# INLINE dot3D #-}

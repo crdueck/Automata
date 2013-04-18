@@ -1,17 +1,17 @@
-import Bindings
+{-# LANGUAGE FlexibleInstances #-}
+
 import Control.Monad
 import Data.Array.Repa
 import Data.Array.Repa.Repr.Cursored
 import Data.IORef
-import Graphics.Rendering.OpenGL
-{-import Graphics.UI.GLFW-}
+import Graphics.Rendering.OpenGL hiding (index)
+import Graphics.UI.GLFW
 import Simplex
 import System.Exit
 
-type Region a = Array D DIM3 a
-type World  a = Array C DIM3 (Region a)
-
 type HeightMap = Array D DIM2 Float
+type Region a  = Array D DIM3 a
+type World  a  = Array C DIM3 (Region a)
 
 f2GLf :: Float -> GLfloat
 f2GLf = realToFrac
@@ -36,62 +36,101 @@ regionGen sh = noise 3 22 +^ noise 3 33 +^ noise 3 44
             harmonic3D octave freq (i2f x) (i2f y) (i2f z)
 
 heightMap :: DIM2 -> HeightMap
-heightMap sh = noise 3 48 +^ noise 3 32 +^ noise 3 48
+heightMap sh = noise 3 10 +^ noise 3 15 +^ noise 3 20 +^ noise 3 3 +^ noise 3 0.25
     where noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
               harmonic2D octave freq (i2f x) (i2f y)
 
-{-renderHeightMap :: HeightMap -> IO ()-}
-{-renderHeightMap arr = do-}
-    {-let Z :. x :. y = extent arr-}
-          {-_STRIDE = 3-}
-    {-forM_ [0,_STRIDE..x] $ \i ->-}
-        {-forM_ [0,_STRIDE..y] $ \j -> do-}
-            {-renderVertex  i             j-}
-            {-renderVertex  i            (j + _STRIDE)-}
-            {-renderVertex (i + _STRIDE) (j + _STRIDE)-}
-            {-renderVertex (i + _STRIDE)  j-}
-    {-where renderVertex i j = do-}
-              {-let h = f2GLf . max 0 $ index arr (ix2 i j)-}
-              {-color  $ Color3 (h + 0.01) h h-}
-              {-vertex $ Vertex3 (i2GLf (2 * i)) (30 * h) (i2GLf (2 * j))-}
+class Renderable a where
+    render :: a -> IO ()
 
-{-initFog :: IO ()-}
-{-initFog = do-}
-    {-hint Fog $= Nicest-}
-    {-fogMode  $= Exp2 0.5-}
-    {-fogColor $= Color4 0.2 0.2 0.2 1.0-}
-    {-fog      $= Enabled-}
+instance Renderable HeightMap where
+    render = renderPrimitive Quads . renderHeightMap
 
-{-initGL :: IO ()-}
-{-initGL = do-}
-    {-clearColor $= Color4 0.8 0.8 0.8 1.0-}
-    {-cullFace   $= Just Front-}
-    {-depthFunc  $= Just Less-}
-    {-hint PerspectiveCorrection $= Nicest-}
-    {-initFog-}
+renderHeightMap :: HeightMap -> IO ()
+renderHeightMap arr = do
+    let delta = 2
+        Z :. x :. y = extent arr
+    forM_ [0,delta..x] $ \i ->
+        forM_ [0,delta..y] $ \j -> do
+            renderVertex  i           j
+            renderVertex  i          (j + delta)
+            renderVertex (i + delta) (j + delta)
+            renderVertex (i + delta)  j
+    where renderVertex i j = do
+              let h = max 0 $ index arr (ix2 i j)
+              color  $ Color3 0 0 h
+              vertex $ Vertex3 (10 * i2GLf i) (30 * h) (10 * i2GLf (-j))
 
-main = print $ harmonic3D (10^4) 10 10 10 10
+initFog :: IO ()
+initFog = do
+    hint Fog $= DontCare
+    fogMode  $= Linear 0 1
+    fogColor $= Color4 0.2 0.2 0.2 0.0
+    fog      $= Enabled
 
-{-main :: IO ()-}
-{-main = do-}
-    {-initialize-}
-    {-openWindow (Size 1080 720) [DisplayDepthBits 32, DisplayRGBBits 8 8 8] Window-}
-    {-windowTitle $= "Automata"-}
-    {-initGL-}
-    {-forever $ do-}
-        {-quit <- fmap (==Press) $ getKey ESC-}
-        {-when quit $ closeWindow >> terminate >> exitSuccess-}
-        {-clear [ColorBuffer, DepthBuffer]-}
-        {--- apply transformations-}
-        {--- draw things-}
-        {-swapBuffers-}
+initLighting :: IO ()
+initLighting = do
+    lighting           $= Enabled
+    light (Light 0)    $= Enabled
+    position (Light 0) $= Vertex4 0 5 10 1
+    lightModelAmbient  $= Color4 0.2 0.2 0.2 1
 
-{-
-zoom     <- newIORef (1.0 :: GLfloat)
-angle    <- newIORef ((0, 0) :: (GLfloat, GLfloat))
-position <- newIORef ((0.0, 0.0, 0.0) :: (GLfloat, GLfloat, GLfloat))
-displayCallback       $= display angle position zoom (renderHeightMap $ heightMap $ ix2 256 256)
-keyboardMouseCallback $= Just (keyboardMouse angle position zoom)
-idleCallback          $= Just (postRedisplay Nothing)
-reshapeCallback       $= Just (\s -> viewport $= (Position 0 0, s))
--}
+initGL :: IO ()
+initGL = do
+    clearColor $= Color4 0.1 0.1 0.1 1.0
+    cullFace   $= Just Front
+    depthFunc  $= Just Less
+    shadeModel $= Smooth
+    hint PerspectiveCorrection $= DontCare
+
+initGLFW :: IO ()
+initGLFW = do
+    enableSpecial KeyRepeat
+
+renderScene :: Renderable a => IORef (Vertex3 GLdouble) -> a -> IO ()
+renderScene camera scene = do
+    clear [ColorBuffer, DepthBuffer]
+    matrixMode $= Projection
+    loadIdentity
+    cameraPos <- get camera
+    perspective 45 1.5 1 1000
+    lookAt cameraPos (Vertex3 640 0 (-640)) (Vector3 0 1 0)
+    render scene
+    swapBuffers
+
+myKeyCallback :: IORef (Vertex3 GLdouble) -> KeyCallback
+myKeyCallback camera key state = do
+    Vertex3 dx dy dz <- get camera
+    when (state == Press) $ case key of
+        CharKey c    -> case c of
+            '-'   -> camera $= Vertex3 dx (dy - 10) dz
+            '='   -> camera $= Vertex3 dx (dy + 10) dz
+            _     -> return ()
+        SpecialKey k -> case k of
+            ESC   -> closeWindow >> terminate >> exitSuccess
+            UP    -> camera $= Vertex3 dx dy (dz - 10)
+            DOWN  -> camera $= Vertex3 dx dy (dz + 10)
+            LEFT  -> camera $= Vertex3 (dx - 10) dy dz
+            RIGHT -> camera $= Vertex3 (dx + 10) dy dz
+            _     -> return ()
+
+myMousePosCallback :: IORef (Vertex3 GLdouble) -> MousePosCallback
+myMousePosCallback _ (Position x y) = return ()
+
+main :: IO ()
+main = do
+    initialize
+    openWindow (Size 1080 720) [DisplayDepthBits 32, DisplayRGBBits 8 8 8] Window
+    windowTitle $= "Automata"
+    initGL
+    initGLFW
+
+    let world = heightMap (ix2 128 128)
+    camera <- newIORef (Vertex3 64 64 64)
+    eye    <- newIORef (Vertex3 64 0 (-64))
+
+    windowSizeCallback $= \s -> viewport $= (Position 0 0, s)
+    {-mousePosCallback   $= myMousePosCallback eye-}
+    keyCallback        $= myKeyCallback camera
+
+    forever $ renderScene camera world
