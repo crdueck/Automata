@@ -1,17 +1,20 @@
 GHC=ghc
-FLAGS=-O2 -fllvm -optlo-O3
-OPT=-fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000
+FLAGS=-O2
+OPT=-fllvm -optlo-O3 -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000
 CORE=-ddump-simpl -ddump-to-file -dsuppress-all -dsuppress-uniques -fforce-recomp
 PROF=-prof -auto-all
 TARGET=Automata
 
 all: automata
 
-automata: simplex
-	$(GHC) $(FLAGS) $(OPT) Automata.hs
+automata: simplex worldgen
+	$(GHC) $(FLAGS) Automata.hs
 
 simplex:
 	$(GHC) $(FLAGS) $(OPT) Simplex.hs
+
+worldgen: simplex
+	$(GHC) $(FLAGS) $(OPT) WorldGen.hs
 
 target:
 	$(GHC) $(FLAGS) $(OPT) $(TARGET).hs
