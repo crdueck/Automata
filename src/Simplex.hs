@@ -1,5 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-
 module Simplex
     ( harmonic2D
     , simplex2D
@@ -56,9 +54,9 @@ simplex2D' p x y = 70 * (n gi0 xy0 + n gi1 xy1 + n gi2 xy2)
 
           (ii, jj) = (i .&. 255, j .&. 255)
 
-          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0 )))) `rem` 12
-          !gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0)))) `rem` 12
-          !gi2 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1 )))) `rem` 12
+          gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0 )))) `rem` 12
+          gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0)))) `rem` 12
+          gi2 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1 )))) `rem` 12
 
           n gi xy@(a, b) =
             let s = 0.5 - a*a - b*b
@@ -92,10 +90,10 @@ simplex3D' p x y z = 32 * (n gi0 xyz0 + n gi1 xyz1 + n gi2 xyz2 + n gi3 xyz3)
 
           (ii, jj, kk) = (i .&. 255, j .&. 255, k .&. 255)
 
-          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0 )))))) `rem` 12
-          !gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0 + w2i (p `U.unsafeIndex` (kk + k0)))))) `rem` 12
-          !gi2 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1)))))) `rem` 12
-          !gi3 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1 )))))) `rem` 12
+          gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0 )))))) `rem` 12
+          gi1 = (p `U.unsafeIndex` (ii + i0 + w2i (p `U.unsafeIndex` (jj + j0 + w2i (p `U.unsafeIndex` (kk + k0)))))) `rem` 12
+          gi2 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1)))))) `rem` 12
+          gi3 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1 )))))) `rem` 12
 
           n gi xyz@(a, b, c) =
               let s = 0.5 - a*a - b*b - c*c
@@ -133,11 +131,11 @@ simplex4D' p x y z w = 27 * (n gi0 xyzw0 + n gi1 xyzw1 + n gi2 xyzw2 + n gi3 xyz
 
           (ii, jj, kk, ll) = (i .&. 255, j .&. 255, k .&. 255, l .&. 255)
 
-          !gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0  + w2i (p `U.unsafeIndex` (ll + 0 )))))))) `rem` 32
-          !gi1 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1 + w2i (p `U.unsafeIndex` (ll + l1)))))))) `rem` 32
-          !gi2 = (p `U.unsafeIndex` (ii + i2 + w2i (p `U.unsafeIndex` (jj + j2 + w2i (p `U.unsafeIndex` (kk + k2 + w2i (p `U.unsafeIndex` (ll + l2)))))))) `rem` 32
-          !gi3 = (p `U.unsafeIndex` (ii + i3 + w2i (p `U.unsafeIndex` (jj + j3 + w2i (p `U.unsafeIndex` (kk + k3 + w2i (p `U.unsafeIndex` (ll + l3)))))))) `rem` 32
-          !gi4 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1  + w2i (p `U.unsafeIndex` (ll + 1 )))))))) `rem` 32
+          gi0 = (p `U.unsafeIndex` (ii + 0  + w2i (p `U.unsafeIndex` (jj + 0  + w2i (p `U.unsafeIndex` (kk + 0  + w2i (p `U.unsafeIndex` (ll + 0 )))))))) `rem` 32
+          gi1 = (p `U.unsafeIndex` (ii + i1 + w2i (p `U.unsafeIndex` (jj + j1 + w2i (p `U.unsafeIndex` (kk + k1 + w2i (p `U.unsafeIndex` (ll + l1)))))))) `rem` 32
+          gi2 = (p `U.unsafeIndex` (ii + i2 + w2i (p `U.unsafeIndex` (jj + j2 + w2i (p `U.unsafeIndex` (kk + k2 + w2i (p `U.unsafeIndex` (ll + l2)))))))) `rem` 32
+          gi3 = (p `U.unsafeIndex` (ii + i3 + w2i (p `U.unsafeIndex` (jj + j3 + w2i (p `U.unsafeIndex` (kk + k3 + w2i (p `U.unsafeIndex` (ll + l3)))))))) `rem` 32
+          gi4 = (p `U.unsafeIndex` (ii + 1  + w2i (p `U.unsafeIndex` (jj + 1  + w2i (p `U.unsafeIndex` (kk + 1  + w2i (p `U.unsafeIndex` (ll + 1 )))))))) `rem` 32
 
           n gi xyzw@(a, b, c, d) =
               let s = 0.5 - a*a - b*b - c*c - d*d

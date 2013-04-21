@@ -1,12 +1,35 @@
 module Callbacks where
 
-import Control.Monad
 import Data.IORef
+import qualified Data.Set as S
 import Graphics.UI.GLFW
 import Graphics.Rendering.OpenGL
 import System.Exit
 
-data Camera = Camera (Vector3 GLdouble) (Vector2 GLdouble)
+data Camera = Camera (Vector3 GLdouble) (GLdouble, GLdouble)
+data Model  = Model (Int, Int) (S.Set Key)
+
+myKeyCallback :: IORef Model -> KeyCallback
+myKeyCallback model (SpecialKey ESC) Press =
+    closeWindow >> terminate >> exitSuccess
+myKeyCallback model key state = do
+    Model regionIx pressedKeys <- get model
+    if state == Press
+       then model $= Model regionIx (S.insert key pressedKeys)
+       else model $= Model regionIx (S.delete key pressedKeys)
+
+myMouseCallback :: IORef Camera -> MousePosCallback
+myMouseCallback camera (Position x y) = do
+    Camera pos (rotX, rotY) <- get camera
+    Size w h <- get windowSize
+
+    let midX = w `quot` 2
+        midY = h `quot` 2
+        dx = fromIntegral $ x - midX
+        dy = fromIntegral $ y - midY
+
+    camera   $= Camera pos (clamp (-90) 90 (rotX + dy), (roll (-180) 180 (rotY + dx)))
+    mousePos $= Position midX midY
 
 rad2deg :: Floating a => a -> a
 {-# INLINE rad2deg #-}
@@ -26,33 +49,3 @@ roll lo hi x
     | x < lo = hi
     | x > hi = lo
     | otherwise = x
-
-myKeyCallback :: IORef Camera -> KeyCallback
-myKeyCallback camera key state = do
-    Camera (Vector3 x y z) rot@(Vector2 _ rotY') <- get camera
-    let rotY = deg2rad rotY'
-    when (state == Press) $ case key of
-        CharKey c -> case c of
-            '-' -> camera $= Camera (Vector3 x (y + 1) z) rot
-            '=' -> camera $= Camera (Vector3 x (y - 1) z) rot
-            'W' -> camera $= Camera (Vector3 (x - sin rotY) y (z + cos rotY)) rot
-            'S' -> camera $= Camera (Vector3 (x + sin rotY) y (z - cos rotY)) rot
-            'A' -> camera $= Camera (Vector3 (x + cos rotY) y (z + sin rotY)) rot
-            'D' -> camera $= Camera (Vector3 (x - cos rotY) y (z - sin rotY)) rot
-            _   -> return ()
-        SpecialKey k -> case k of
-            ESC -> closeWindow >> terminate >> exitSuccess
-            _   -> return ()
-
-myMouseCallback :: IORef Camera -> MousePosCallback
-myMouseCallback camera (Position x y) = do
-    Camera pos (Vector2 rotX rotY) <- get camera
-    Size w h <- get windowSize
-
-    let midX = w `quot` 2
-        midY = h `quot` 2
-        dx = fromIntegral $ x - midX
-        dy = fromIntegral $ y - midY
-
-    camera   $= Camera pos (Vector2 (clamp (-90) 90 $ rotX + dy) (roll (-180) 180 $ rotY + dx))
-    mousePos $= Position midX midY

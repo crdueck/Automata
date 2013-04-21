@@ -1,62 +1,29 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
+import Callbacks
 import Control.Monad
 import Data.Array.Repa as A
 import Data.IORef
+import qualified Data.Set as S
+import qualified Data.Vector.Storable as V
+import Foreign.Storable
 import Graphics.Rendering.OpenGL
 import Graphics.UI.GLFW
-import System.Exit
 import WorldGen
 
 class Renderable a where
     render :: a -> IO ()
 
-instance Renderable HeightMap where
-    render = renderPrimitive Triangles . renderHeightMap
-
-data Camera = Camera (Vector3 GLdouble) (Vector2 GLdouble)
-
-rad2deg :: Floating a => a -> a
-{-# INLINE rad2deg #-}
-rad2deg rad = rad * 180 / pi
-
-deg2rad :: Floating a => a -> a
-{-# INLINE deg2rad #-}
-deg2rad deg = deg * pi / 180
-
-clamp :: Ord a => a -> a -> a -> a
-{-# INLINE clamp #-}
-clamp lo hi x = min (max x lo) hi
-
-roll :: Ord a => a -> a -> a -> a
-{-# INLINE roll #-}
-roll lo hi x
-    | x < lo = hi
-    | x > hi = lo
-    | otherwise = x
-
-renderHeightMap :: HeightMap -> IO ()
-renderHeightMap arr = do
-    let Z :. x :. y = extent arr
-    forM_ [0..x-2] $ \i ->
-        forM_ [0..y-2] $ \j -> do
-            renderVertex  i       j
-            renderVertex (i + 1)  j
-            renderVertex  i      (j + 1)
-            renderVertex  i      (j + 1)
-            renderVertex (i + 1)  j
-            renderVertex (i + 1) (j + 1)
-    where renderVertex i j = do
-              let h = realToFrac . max 0 $ A.index arr (ix2 i j) :: GLfloat
-              color  $ Color3 0 0 h
-              vertex $ Vertex3 (fromIntegral i) (3 * h) (fromIntegral (-j))
+instance Renderable Region where
+    render = renderRegion
 
 initFog :: IO ()
 initFog = do
-    hint Fog $= Nicest
-    fogMode  $= Linear 20 100
-    fogColor $= Color4 0.2 0.2 0.2 1.0
     fog      $= Enabled
+    fogMode  $= Linear 32 128
+    fogColor $= Color4 0.2 0.2 0.2 1.0
+    hint Fog $= Nicest
 
 initLighting :: IO ()
 initLighting = do
@@ -65,8 +32,8 @@ initLighting = do
     position (Light 0) $= Vertex4 0 5 10 1
     lightModelAmbient  $= Color4 0.2 0.2 0.2 1
 
-initGL :: IO ()
-initGL = do
+initialize' :: IO ()
+initialize' = do
     clearColor $= Color4 0.0 0.0 0.0 1.0
     cullFace   $= Just Back
     depthFunc  $= Just Less
@@ -74,66 +41,88 @@ initGL = do
     hint PerspectiveCorrection $= Nicest
     initFog
 
-renderScene :: Renderable a => IORef Camera -> a -> IO ()
-renderScene camera scene = do
+makeBuffer :: forall a. Storable a => BufferTarget -> [a] -> IO BufferObject
+makeBuffer target elems = do
+    [buffer] <- genObjectNames 1
+    bindBuffer target $= Just buffer
+    let v = V.fromList elems
+        n = fromIntegral $ V.length v * sizeOf (undefined :: a)
+    V.unsafeWith v $ \ptr -> bufferData target $= (n, ptr, StaticDraw)
+    return buffer
+
+renderRegion :: Region -> IO ()
+renderRegion arr = do
+    let Z :. x :. y = extent arr
+    forM_ [(i, j) | i <- [0..x-2], j <- [0..y-2]] $ \(i, j) ->
+        renderPrimitive TriangleStrip $ do
+            renderVertex  i       j
+            renderVertex  i      (j + 1)
+            renderVertex (i + 1)  j
+            renderVertex (i + 1) (j + 1)
+    where renderVertex i j = do
+            let h = realToFrac . max 0 $ A.index arr (ix2 i j) :: GLfloat
+            color  $ Color3 0 0 h
+            vertex $ Vertex3 (fromIntegral i) (3 * h) (fromIntegral j)
+
+renderWorld :: Renderable a => IORef Camera -> IORef Model -> Double -> a -> IO ()
+renderWorld camera model t0 world = do
     clear [ColorBuffer, DepthBuffer]
     matrixMode $= Projection
     loadIdentity
     perspective 45 1.5 1 1000
     matrixMode $= Modelview 0
     loadIdentity
-    Camera pos (Vector2 rotX rotY) <- get camera
+    Camera pos (rotX, rotY) <- get camera
     rotate rotX $ Vector3 1 0 (0 :: GLdouble)
     rotate rotY $ Vector3 0 1 (0 :: GLdouble)
     translate pos
-    render scene
+    render world
     swapBuffers
 
-myKeyCallback :: IORef Camera -> KeyCallback
-myKeyCallback camera key state = do
-    Camera (Vector3 x y z) rot@(Vector2 _ rotY') <- get camera
-    let rotY = deg2rad rotY'
-    when (state == Press) $ case key of
-        CharKey c -> case c of
-            '-' -> camera $= Camera (Vector3 x (y + 1) z) rot
-            '=' -> camera $= Camera (Vector3 x (y - 1) z) rot
-            'W' -> camera $= Camera (Vector3 (x - sin rotY) y (z + cos rotY)) rot
-            'S' -> camera $= Camera (Vector3 (x + sin rotY) y (z - cos rotY)) rot
-            'A' -> camera $= Camera (Vector3 (x + cos rotY) y (z + sin rotY)) rot
-            'D' -> camera $= Camera (Vector3 (x - cos rotY) y (z - sin rotY)) rot
-            _   -> return ()
-        SpecialKey k -> case k of
-            ESC -> closeWindow >> terminate >> exitSuccess
-            _   -> return ()
+updateWorld :: Renderable a => IORef Camera -> IORef Model -> Double -> a -> IO ()
+updateWorld camera model t0 world = do
+    Camera (Vector3 x y z) rot@(_, rotY') <- get camera
+    Model (i, j) pressedKeys <- get model
 
-myMouseCallback :: IORef Camera -> MousePosCallback
-myMouseCallback camera (Position x y) = do
-    Camera pos (Vector2 rotX rotY) <- get camera
-    Size w h <- get windowSize
+    t1 <- get time
+    let dt   = realToFrac $ 50 * (t1 - t0)
+        rotY = deg2rad rotY'
 
-    let midX = w `quot` 2
-        midY = h `quot` 2
-        dx = fromIntegral $ x - midX
-        dy = fromIntegral $ y - midY
+        handleKey key (dx, dy, dz) = case key of
+            CharKey 'W' -> (dx - dt * sin rotY, dy, dz + dt * cos rotY)
+            CharKey 'S' -> (dx + dt * sin rotY, dy, dz - dt * cos rotY)
+            CharKey 'A' -> (dx + dt * cos rotY, dy, dz + dt * sin rotY)
+            CharKey 'D' -> (dx - dt * cos rotY, dy, dz - dt * sin rotY)
+            CharKey '-' -> (dx, dy + dt, dz)
+            CharKey '=' -> (dx, dy - dt, dz)
+            _ -> (dx, dy, dz)
 
-    camera   $= Camera pos (Vector2 (clamp (-90) 90 $ rotX + dy) (roll (-180) 180 $ rotY + dx))
-    mousePos $= Position midX midY
+        (dx, dy, dz) = S.foldr handleKey (0, 0, 0) pressedKeys
+        newPos = Vector3 (x + dx) (y + dy) (z + dz)
+
+    camera $= Camera newPos rot
 
 main :: IO ()
 main = do
     initialize
     openWindow (Size 1080 720) [DisplayDepthBits 32, DisplayRGBBits 8 8 8] Window
-    windowTitle $= "Automata"
+    windowTitle  $= "Automata"
+    swapInterval $= 1
     enableSpecial  KeyRepeat
     disableSpecial MouseCursor
-    initGL
+    initialize'
 
-    camera <- newIORef $ Camera (Vector3 (-64) (-5) (-34)) (Vector2 0 0)
+    let r = regionGen (ix2 256 256)
+        w = worldGen  (ix2 256 256)
 
-    let world  = heightMap (ix2 128 128)
+    camera <- newIORef $ Camera (Vector3 0 (-5) 0) (0, 0)
+    model  <- newIORef $ Model (0, 0) S.empty
 
     windowSizeCallback $= \s -> viewport $= (Position 0 0, s)
     mousePosCallback   $= myMouseCallback camera
-    keyCallback        $= myKeyCallback camera
+    keyCallback        $= myKeyCallback model
 
-    forever $ renderScene camera world
+    forever $ do
+        t0 <- get time
+        renderWorld camera model t0 r
+        updateWorld camera model t0 r

@@ -7,8 +7,11 @@ TARGET=Automata
 
 all: automata
 
-automata: simplex worldgen
+automata: callbacks simplex worldgen
 	$(GHC) $(FLAGS) Automata.hs
+
+callbacks:
+	$(GHC) $(FLAGS) Callbacks.hs
 
 simplex:
 	$(GHC) $(FLAGS) $(OPT) Simplex.hs
