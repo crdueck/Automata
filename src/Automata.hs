@@ -12,64 +12,67 @@ class Renderable a where
     render :: a -> IO ()
 
 instance Renderable HeightMap where
-    render = renderPrimitive Quads . renderHeightMap
+    render = renderPrimitive Triangles . renderHeightMap
 
-{-instance Num a => Num (Vector3 a) where-}
-    {-(Vector3 a b c) + (Vector3 x y z) = Vector3 (a + x) (b + y) (c + z)-}
-    {-(Vector3 a b c) * (Vector3 x y z) = -- cross product-}
-        {-Vector3 (b * z - c * y) (c * x - a * z) (a * y - b * x)-}
-    {-fromInteger x = Vector3 (fromIntegral x) (fromIntegral x) (fromIntegral x)-}
+data Camera = Camera (Vector3 GLdouble) (Vector2 GLdouble)
 
-data Camera = Camera
-    { cameraPos :: Vector3 GLdouble
-    , cameraRot :: Vector2 GLdouble
-    }
+rad2deg :: Floating a => a -> a
+{-# INLINE rad2deg #-}
+rad2deg rad = rad * 180 / pi
 
-f2GLf :: Float -> GLfloat
-f2GLf = realToFrac
+deg2rad :: Floating a => a -> a
+{-# INLINE deg2rad #-}
+deg2rad deg = deg * pi / 180
 
-i2GLf :: Int -> GLfloat
-i2GLf = fromIntegral
+clamp :: Ord a => a -> a -> a -> a
+{-# INLINE clamp #-}
+clamp lo hi x = min (max x lo) hi
 
-toRad :: Floating a => a -> a
-toRad deg = deg * pi / 180
+roll :: Ord a => a -> a -> a -> a
+{-# INLINE roll #-}
+roll lo hi x
+    | x < lo = hi
+    | x > hi = lo
+    | otherwise = x
 
 renderHeightMap :: HeightMap -> IO ()
 renderHeightMap arr = do
-    let delta = 1
-        Z :. x :. y = extent arr
-    forM_ [0,delta..x] $ \i ->
-        forM_ [0,delta..y] $ \j -> do
-            renderVertex  i           j
-            renderVertex  i          (j + delta)
-            renderVertex (i + delta) (j + delta)
-            renderVertex (i + delta)  j
+    let Z :. x :. y = extent arr
+    forM_ [0..x-2] $ \i ->
+        forM_ [0..y-2] $ \j -> do
+            renderVertex  i       j
+            renderVertex (i + 1)  j
+            renderVertex  i      (j + 1)
+            renderVertex  i      (j + 1)
+            renderVertex (i + 1)  j
+            renderVertex (i + 1) (j + 1)
     where renderVertex i j = do
-            let h = f2GLf . max 0 $ A.index arr (ix2 i j)
-            color  $ Color3 0 0 h
-            vertex $ Vertex3 (10 * i2GLf i) (30 * h) (10 * i2GLf (-j))
+              let h = realToFrac . max 0 $ A.index arr (ix2 i j) :: GLfloat
+              color  $ Color3 0 0 h
+              vertex $ Vertex3 (fromIntegral i) (3 * h) (fromIntegral (-j))
 
-{-initFog :: IO ()-}
-{-initFog = do-}
-    {-hint Fog $= Nicest-}
-    {-fogMode  $= Linear 0 1-}
-    {-fogColor $= Color4 0.2 0.2 0.2 0.0-}
-    {-fog      $= Enabled-}
+initFog :: IO ()
+initFog = do
+    hint Fog $= Nicest
+    fogMode  $= Linear 20 100
+    fogColor $= Color4 0.2 0.2 0.2 1.0
+    fog      $= Enabled
 
-{-initLighting :: IO ()-}
-{-initLighting = do-}
-    {-lighting           $= Enabled-}
-    {-light (Light 0)    $= Enabled-}
-    {-position (Light 0) $= Vertex4 0 5 10 1-}
-    {-lightModelAmbient  $= Color4 0.2 0.2 0.2 1-}
+initLighting :: IO ()
+initLighting = do
+    lighting           $= Enabled
+    light (Light 0)    $= Enabled
+    position (Light 0) $= Vertex4 0 5 10 1
+    lightModelAmbient  $= Color4 0.2 0.2 0.2 1
 
 initGL :: IO ()
 initGL = do
     clearColor $= Color4 0.0 0.0 0.0 1.0
-    cullFace   $= Just Front
+    cullFace   $= Just Back
     depthFunc  $= Just Less
     shadeModel $= Smooth
     hint PerspectiveCorrection $= Nicest
+    initFog
 
 renderScene :: Renderable a => IORef Camera -> a -> IO ()
 renderScene camera scene = do
@@ -80,7 +83,7 @@ renderScene camera scene = do
     matrixMode $= Modelview 0
     loadIdentity
     Camera pos (Vector2 rotX rotY) <- get camera
-    {-rotate 20   $ Vector3 1 0 (0 :: GLdouble)-}
+    rotate rotX $ Vector3 1 0 (0 :: GLdouble)
     rotate rotY $ Vector3 0 1 (0 :: GLdouble)
     translate pos
     render scene
@@ -88,16 +91,16 @@ renderScene camera scene = do
 
 myKeyCallback :: IORef Camera -> KeyCallback
 myKeyCallback camera key state = do
-    Camera (Vector3 dx dy dz) rot@(Vector2 rotX rotY) <- get camera
+    Camera (Vector3 x y z) rot@(Vector2 _ rotY') <- get camera
+    let rotY = deg2rad rotY'
     when (state == Press) $ case key of
         CharKey c -> case c of
-            '-' -> camera $= Camera (Vector3 dx (dy + 10) dz) rot
-            '=' -> camera $= Camera (Vector3 dx (dy - 10) dz) rot
-
-            'W' -> camera $= Camera (Vector3 (dx + 10 * sin (toRad rotY)) dy (dz + 10 * cos (toRad rotY))) rot
-            'S' -> camera $= Camera (Vector3 (dx - 10 * sin (toRad rotY)) dy (dz - 10 * cos (toRad rotY))) rot
-            'A' -> camera $= Camera (Vector3 (dx + 10) dy dz) rot
-            'D' -> camera $= Camera (Vector3 (dx - 10) dy dz) rot
+            '-' -> camera $= Camera (Vector3 x (y + 1) z) rot
+            '=' -> camera $= Camera (Vector3 x (y - 1) z) rot
+            'W' -> camera $= Camera (Vector3 (x - sin rotY) y (z + cos rotY)) rot
+            'S' -> camera $= Camera (Vector3 (x + sin rotY) y (z - cos rotY)) rot
+            'A' -> camera $= Camera (Vector3 (x + cos rotY) y (z + sin rotY)) rot
+            'D' -> camera $= Camera (Vector3 (x - cos rotY) y (z - sin rotY)) rot
             _   -> return ()
         SpecialKey k -> case k of
             ESC -> closeWindow >> terminate >> exitSuccess
@@ -111,9 +114,9 @@ myMouseCallback camera (Position x y) = do
     let midX = w `quot` 2
         midY = h `quot` 2
         dx = fromIntegral $ x - midX
-        dy = fromIntegral $ y - midX
+        dy = fromIntegral $ y - midY
 
-    camera   $= Camera pos (Vector2 (rotX + dy) (rotY + dx))
+    camera   $= Camera pos (Vector2 (clamp (-90) 90 $ rotX + dy) (roll (-180) 180 $ rotY + dx))
     mousePos $= Position midX midY
 
 main :: IO ()
@@ -121,11 +124,11 @@ main = do
     initialize
     openWindow (Size 1080 720) [DisplayDepthBits 32, DisplayRGBBits 8 8 8] Window
     windowTitle $= "Automata"
-    enableSpecial KeyRepeat
+    enableSpecial  KeyRepeat
     disableSpecial MouseCursor
     initGL
 
-    camera <- newIORef $ Camera (Vector3 (-640) 10 (-340)) (Vector2 0 0)
+    camera <- newIORef $ Camera (Vector3 (-64) (-5) (-34)) (Vector2 0 0)
 
     let world  = heightMap (ix2 128 128)
 
