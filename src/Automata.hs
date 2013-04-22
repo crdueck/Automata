@@ -21,7 +21,7 @@ instance Renderable Region where
 initFog :: IO ()
 initFog = do
     fog      $= Enabled
-    fogMode  $= Linear 32 128
+    fogMode  $= Linear 250 2000
     fogColor $= Color4 0.2 0.2 0.2 1.0
     hint Fog $= Nicest
 
@@ -34,12 +34,17 @@ initLighting = do
 
 initialize' :: IO ()
 initialize' = do
-    clearColor $= Color4 0.0 0.0 0.0 1.0
+    clearColor $= Color4 0.5 0.7 1.0 1.0
     cullFace   $= Just Back
     depthFunc  $= Just Less
+    lineSmooth $= Enabled
     shadeModel $= Smooth
     hint PerspectiveCorrection $= Nicest
     initFog
+
+toVertexBuffer :: (Num e, Shape sh, Source r e) => Array r sh e -> [e]
+toVertexBuffer arr = concat . toList . traverse arr id $ \f ix ->
+    f ix : fmap fromIntegral (listOfShape ix)
 
 makeBuffer :: forall a. Storable a => BufferTarget -> [a] -> IO BufferObject
 makeBuffer target elems = do
@@ -54,22 +59,22 @@ renderRegion :: Region -> IO ()
 renderRegion arr = do
     let Z :. x :. y = extent arr
     forM_ [(i, j) | i <- [0..x-2], j <- [0..y-2]] $ \(i, j) ->
-        renderPrimitive TriangleStrip $ do
+        renderPrimitive LineStrip $ do
             renderVertex  i       j
             renderVertex  i      (j + 1)
             renderVertex (i + 1)  j
             renderVertex (i + 1) (j + 1)
     where renderVertex i j = do
             let h = realToFrac . max 0 $ A.index arr (ix2 i j) :: GLfloat
-            color  $ Color3 0 0 h
-            vertex $ Vertex3 (fromIntegral i) (3 * h) (fromIntegral j)
+            color  $ if h == 0 then Color3 0.0 0.75 0.33 else Color3 0 0 h
+            vertex $ fmap (*10) $ Vertex3 (fromIntegral i) (10 * h) (fromIntegral j)
 
 renderWorld :: Renderable a => IORef Camera -> IORef Model -> Double -> a -> IO ()
 renderWorld camera model t0 world = do
     clear [ColorBuffer, DepthBuffer]
     matrixMode $= Projection
     loadIdentity
-    perspective 45 1.5 1 1000
+    perspective 45 1.5 1 10000
     matrixMode $= Modelview 0
     loadIdentity
     Camera pos (rotX, rotY) <- get camera
@@ -85,7 +90,7 @@ updateWorld camera model t0 world = do
     Model (i, j) pressedKeys <- get model
 
     t1 <- get time
-    let dt   = realToFrac $ 50 * (t1 - t0)
+    let dt   = realToFrac $ 1000 * (t1 - t0)
         rotY = deg2rad rotY'
 
         handleKey key (dx, dy, dz) = case key of
@@ -115,7 +120,7 @@ main = do
     let r = regionGen (ix2 256 256)
         w = worldGen  (ix2 256 256)
 
-    camera <- newIORef $ Camera (Vector3 0 (-5) 0) (0, 0)
+    camera <- newIORef $ Camera (Vector3 0 (-10) 0) (0, 0)
     model  <- newIORef $ Model (0, 0) S.empty
 
     windowSizeCallback $= \s -> viewport $= (Position 0 0, s)

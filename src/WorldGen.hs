@@ -1,14 +1,27 @@
+{-# LANGUAGE QuasiQuotes #-}
 module WorldGen (Region, regionGen, World, worldGen) where
-import Data.Array.Repa
+import Data.Array.Repa as R
 import Data.Array.Repa.Repr.Cursored
+import Data.Array.Repa.Stencil
+import Data.Array.Repa.Stencil.Dim2
 import Simplex
 
 type Region = Array U DIM2 Float
 type World  = Array C DIM2 Region
 
+sten1 :: Stencil DIM2 Float
+sten1 = [stencil2| 1 1 1
+                   1 0 1
+                   1 1 1 |]
+
 regionGen :: DIM2 -> Region
-regionGen sh = computeUnboxedS $ noise 3 10 +^ noise 3 20 +^ noise 3 40 +^ noise 5 0.25
-    where noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
+regionGen sh =
+    let noisey = noise 5 25 +^ noise 3 45 +^ noise 3 110 +^ noise 5 220
+        damped = mapStencil2 (BoundConst 0) sten1 noisey
+    in computeUnboxedS $ R.zipWith damp noisey damped
+    where damp _ 0 = 0
+          damp n _ = n
+          noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
               harmonic2D octave freq (fromIntegral x) (fromIntegral y)
 
 worldGen :: DIM2 -> World
