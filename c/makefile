@@ -1,6 +1,6 @@
 CC=g++ -Wall
 CFLAGS=-O2
-LIB=-lGL -lGLU -lglfw
+LIB=-lGL -lGLEW -lglfw
 
 EXEC=automata
 
