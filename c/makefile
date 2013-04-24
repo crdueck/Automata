@@ -1,15 +1,17 @@
 CC=g++ -Wall
 CFLAGS=-O2
-LIB=-lGL -lGLEW -lglfw
+LDFLAGS=-lGL -lGLEW -lglfw
+SOURCES=callbacks.cpp main.cpp
+OBJECTS=$(SOURCES:.cpp=.o)
+EXECUTABLE=automata
 
-EXEC=automata
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 
-all: main
-
-main:
-	$(CC) $(CFLAGS) main.cpp $(LIB) -o $(EXEC)
+.cpp.o:
+	$(CC) $(CFLAGS) $< -c -o $@
 
 clean:
-	rm -rf $(EXEC)
+	rm -rf $(OBJECTS) $(EXECUTABLE)
 
 .PHONY: clean
