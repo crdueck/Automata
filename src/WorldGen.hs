@@ -15,13 +15,8 @@ sten1 = [stencil2| 1 1 1
                    1 1 1 |]
 
 regionGen :: DIM2 -> Region
-regionGen sh =
-    let noisey = noise 5 25 +^ noise 3 45 +^ noise 3 110 +^ noise 5 220
-        damped = mapStencil2 (BoundConst 0) sten1 noisey
-    in computeUnboxedS $ R.zipWith damp noisey damped
-    where damp _ 0 = 0
-          damp n _ = n
-          noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
+regionGen sh = computeUnboxedS $ noise 5 25 +^ noise 3 45 +^ noise 3 110 +^ noise 5 220
+    where noise octave freq = fromFunction sh $ \(Z :. x :. y) ->
               harmonic2D octave freq (fromIntegral x) (fromIntegral y)
 
 worldGen :: DIM2 -> World

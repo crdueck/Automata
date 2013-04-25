@@ -3,7 +3,7 @@
 
 import Callbacks
 import Control.Monad
-import Data.Array.Repa as A
+import Data.Array.Repa as A hiding ((++))
 import Data.IORef
 import qualified Data.Set as S
 import qualified Data.Vector.Storable as V
@@ -21,8 +21,8 @@ instance Renderable Region where
 initFog :: IO ()
 initFog = do
     fog      $= Enabled
-    fogMode  $= Linear 250 2000
-    fogColor $= Color4 0.2 0.2 0.2 1.0
+    fogMode  $= Linear 1000 2000
+    fogColor $= Color4 0.5 0.7 1.0 1.0
     hint Fog $= Nicest
 
 initLighting :: IO ()
@@ -37,28 +37,14 @@ initialize' = do
     clearColor $= Color4 0.5 0.7 1.0 1.0
     cullFace   $= Just Back
     depthFunc  $= Just Less
-    lineSmooth $= Enabled
-    shadeModel $= Smooth
+    lineWidth  $= 1.5
     hint PerspectiveCorrection $= Nicest
     initFog
-
-toVertexBuffer :: (Num e, Shape sh, Source r e) => Array r sh e -> [e]
-toVertexBuffer arr = concat . toList . traverse arr id $ \f ix ->
-    f ix : fmap fromIntegral (listOfShape ix)
-
-makeBuffer :: forall a. Storable a => BufferTarget -> [a] -> IO BufferObject
-makeBuffer target elems = do
-    [buffer] <- genObjectNames 1
-    bindBuffer target $= Just buffer
-    let v = V.fromList elems
-        n = fromIntegral $ V.length v * sizeOf (undefined :: a)
-    V.unsafeWith v $ \ptr -> bufferData target $= (n, ptr, StaticDraw)
-    return buffer
 
 renderRegion :: Region -> IO ()
 renderRegion arr = do
     let Z :. x :. y = extent arr
-    forM_ [(i, j) | i <- [0..x-2], j <- [0..y-2]] $ \(i, j) ->
+    forM_ [(i, j) | i <- [0..x-2], j <- [0..y-2]] $ \(i, j) -> do
         renderPrimitive LineStrip $ do
             renderVertex  i       j
             renderVertex  i      (j + 1)
@@ -66,7 +52,7 @@ renderRegion arr = do
             renderVertex (i + 1) (j + 1)
     where renderVertex i j = do
             let h = realToFrac . max 0 $ A.index arr (ix2 i j) :: GLfloat
-            color  $ if h == 0 then Color3 0.0 0.75 0.33 else Color3 0 0 h
+            color  $ Color3 (fromIntegral i / fromIntegral width) (fromIntegral j / fromIntegral height) h
             vertex $ fmap (*10) $ Vertex3 (fromIntegral i) (10 * h) (fromIntegral j)
 
 renderWorld :: Renderable a => IORef Camera -> IORef Model -> Double -> a -> IO ()
@@ -107,6 +93,10 @@ updateWorld camera model t0 world = do
 
     camera $= Camera newPos rot
 
+width, height :: Int
+width = 5
+height = 5
+
 main :: IO ()
 main = do
     initialize
@@ -117,8 +107,7 @@ main = do
     disableSpecial MouseCursor
     initialize'
 
-    let r = regionGen (ix2 256 256)
-        w = worldGen  (ix2 256 256)
+    let r = regionGen (ix2 width height)
 
     camera <- newIORef $ Camera (Vector3 0 (-10) 0) (0, 0)
     model  <- newIORef $ Model (0, 0) S.empty
@@ -127,7 +116,9 @@ main = do
     mousePosCallback   $= myMouseCallback camera
     keyCallback        $= myKeyCallback model
 
-    forever $ do
-        t0 <- get time
-        renderWorld camera model t0 r
-        updateWorld camera model t0 r
+    renderWorld camera model 0.0 r
+    terminate
+    {-forever $ do-}
+        {-t0 <- get time-}
+        {-renderWorld camera model t0 r-}
+        {-updateWorld camera model t0 r-}

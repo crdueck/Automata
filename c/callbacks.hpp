@@ -29,5 +29,5 @@ typedef struct camera_t
     (camera).rotX = 0.0f; \
     (camera).rotY = 0.0f; \
     (camera).movement = 0; \
-    (camera).speed = 50.0f; \
+    (camera).speed = 1000.0f; \
 } while(0)
