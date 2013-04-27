@@ -1,5 +1,3 @@
-#include <cstdlib>
-#include <cassert>
 #include <GL/glew.h>
 #include <GL/glfw.h>
 #include <glm/glm.hpp>
@@ -19,33 +17,6 @@ void glInit()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glLineWidth(1.5f);
-
-    //glEnable(GL_FOG);
-    //glFogi(GL_FOG_MODE, GL_LINEAR);
-    //glFogf(GL_FOG_DENSITY, 0.2f);
-    //glFogi(GL_FOG_START, 30.0f);
-    //glFogi(GL_FOG_END, 100.0f);
-    //glHint(GL_FOG_HINT, GL_NICEST);
-    //GLfloat fogColor[4] = { 0.5f, 0.7f, 1.0f, 1.0f };
-    //glFogfv(GL_FOG_COLOR, fogColor);
-
-    //glEnable(GL_LIGHTING);
-    //glEnable(GL_LIGHT0);
-    //GLfloat diffuseLight[3] = { 1.0f, 1.0f, 1.0f };
-    //GLfloat ambientLight[3] = { 0.2f, 0.2f, 0.2f };
-    //glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLight);
-    //glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLight);
-    //GLfloat lightPosition[4] = { 100.0f, 120.0f, 100.0f };
-    //glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
-    //GLfloat diffuseMat[3] = { 0.2f, 0.2f, 0.2f };
-    //GLfloat ambientMat[3] = { 0.0f, 0.0f, 0.0f };
-    //GLfloat specularMat[3] = { 0.2f, 0.2f, 0.2f };
-    //GLfloat shininess = 0.50;
-
-    //glMaterialfv(GL_FRONT, GL_DIFFUSE, diffuseMat);
-    //glMaterialfv(GL_FRONT, GL_AMBIENT, ambientMat);
-    //glMaterialfv(GL_FRONT, GL_SPECULAR, specularMat);
-    //glMaterialfv(GL_FRONT, GL_SHININESS, &shininess);
 }
 
 GLchar *loadShaderSource(const char *file)
@@ -71,7 +42,6 @@ void updateWorld(float dt)
     float moveSpeed = g_camera.speed * dt;
     float phi = glm::radians(g_camera.rotY);
 
-    // UPDATE CAMERA
     if (g_camera.movement & MOVE_FORWARD) {
         g_camera.position.x -= moveSpeed * sin(phi);
         g_camera.position.z += moveSpeed * cos(phi);
@@ -189,8 +159,8 @@ int main(int argc, char const *argv[])
 
     // PROJECTION MATRIX
     glm::mat4 proj = glm::perspective(45.0f, 1.5f, 1.0f, 10000.0f);
-    GLint uniProj = glGetUniformLocation(shaderProgram, "u_Proj");
-    glUniformMatrix4fv(uniProj, 1.0, GL_FALSE, glm::value_ptr(proj));
+    GLint uProj = glGetUniformLocation(shaderProgram, "uProj");
+    glUniformMatrix4fv(uProj, 1.0, GL_FALSE, glm::value_ptr(proj));
 
     double lastTime = glfwGetTime();
 
