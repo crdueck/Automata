@@ -1,16 +1,15 @@
-#version 120
+#version 330
 
-uniform mat4 u_Proj;
-uniform mat4 u_Model;
+in vec3 position;
 
-varying vec3 v_Color;
-varying vec3 v_Normal;
+uniform mat4 uProj;
+uniform mat4 uModel;
 
-void main() {
-    vec3 position = vec3(gl_Vertex.x, 10.0 * gl_Vertex.y, gl_Vertex.z);
+out vec4 vColor;
 
-    v_Color = vec3(0.0, 0.0, gl_Vertex.y);
-    v_Normal = normalize(gl_NormalMatrix * gl_Normal);
-
-    gl_Position = u_Proj * u_Model * vec4(position, 0.1);;
+void main()
+{
+    vColor = vec4(0.1, 0.1, position.y, 1.0);
+    gl_Position = vec4(position.x, 10.0 * position.y, position.z, 0.1);
+    gl_Position = uProj * uModel * gl_Position;
 }
