@@ -107,7 +107,6 @@ float harmonic2D(size_t octave, float freq, float x, float y)
 }
 
 static const size_t WIDTH = 512;
-//static const size_t HEIGHT = 450;
 static const size_t HEIGHT = 512;
 
 int main(int argc, char const *argv[])
@@ -121,57 +120,49 @@ int main(int argc, char const *argv[])
     glfwSetWindowSizeCallback(&windowSizeCallback);
     glfwSwapInterval(1);
 
-    glInit();
     glewInit();
+    glInit();
 
     INIT_CAMERA(g_camera);
 
-    float heightmap[WIDTH * HEIGHT * 3];
-
-    for (size_t i = 0; i < WIDTH; i++) {
+    float *heightmap = new float[WIDTH * HEIGHT * 3];
+    for (size_t i = 0, ix = 0; i < WIDTH; i++) {
         for (size_t j = 0; j < HEIGHT; j++) {
             float noise = 0.0f;
             noise += 0.2f * harmonic2D(3, 5.0f, i, j);
             noise += harmonic2D(3,  45.0f, i, j);
             noise += harmonic2D(5, 110.0f, i, j);
             noise += harmonic2D(5, 220.0f, i, j);
-
-            heightmap[(i * 3) + (j * 3 * WIDTH) + 0] = (float)i;
-            heightmap[(i * 3) + (j * 3 * WIDTH) + 1] = glm::max(0.0f, noise);
-            heightmap[(i * 3) + (j * 3 * WIDTH) + 2] = (float)j;
+            heightmap[ix++] = (float)i;
+            heightmap[ix++] = glm::max(0.0f, noise);
+            heightmap[ix++] = (float)j;
         }
     }
 
-    GLuint indices[WIDTH * HEIGHT * 6];
-
-    size_t ix = 0;
-    for (size_t i = 0; i < WIDTH - 1; i++) {
+    const int numIndices = (WIDTH - 1) * (HEIGHT - 1) * 6;
+    GLuint *indices = new GLuint[numIndices];
+    for (size_t i = 0, ix = 0; i < WIDTH - 1; i++) {
         for (size_t j = 0; j < HEIGHT - 1; j++) {
             indices[ix++] = (i + 0) + (j + 0) * WIDTH;
-            indices[ix++] = (i + 0) + (j + 1) * WIDTH;
-            indices[ix++] = (i + 1) + (j + 0) * WIDTH;
             indices[ix++] = (i + 1) + (j + 0) * WIDTH;
             indices[ix++] = (i + 0) + (j + 1) * WIDTH;
+            indices[ix++] = (i + 0) + (j + 1) * WIDTH;
+            indices[ix++] = (i + 1) + (j + 0) * WIDTH;
             indices[ix++] = (i + 1) + (j + 1) * WIDTH;
         }
     }
-
-    // VERTEX ARRAY OBJECT
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
 
     // VERTEX BUFFER OBJECT
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(heightmap), heightmap, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, WIDTH * HEIGHT * 3 * sizeof(float), heightmap, GL_STATIC_DRAW);
 
     // ELEMENT BUFFER OBJECT
     GLuint ebo;
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, numIndices * sizeof(GLuint), indices, GL_STATIC_DRAW);
 
     GLchar *shaderSource;
 
@@ -216,16 +207,15 @@ int main(int argc, char const *argv[])
         model = glm::rotate(model, g_camera.rotX, glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, g_camera.rotY, glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::translate(model, g_camera.position);
-        GLint uniModel = glGetUniformLocation(shaderProgram, "u_Model");
-        glUniformMatrix4fv(uniModel, 1, GL_FALSE, glm::value_ptr(model));
+        GLint uModel = glGetUniformLocation(shaderProgram, "uModel");
+        glUniformMatrix4fv(uModel, 1, GL_FALSE, glm::value_ptr(model));
 
         // CLEAR BUFFERS AND RENDER
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-        glDrawElements(GL_TRIANGLES, ix, GL_UNSIGNED_INT, NULL);
+        glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, NULL);
         glfwSwapBuffers();
     } while(glfwGetKey(GLFW_KEY_ESC) != GLFW_PRESS);
 
@@ -235,9 +225,12 @@ int main(int argc, char const *argv[])
     glDeleteShader(vertexShader);
 
     glDeleteBuffers(1, &vbo);
-    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &ebo);
 
     glfwCloseWindow();
     glfwTerminate();
+
+    delete[] heightmap;
+    delete[] indices;
     return 0;
 }
