@@ -5,9 +5,7 @@
 #include <glm/gtc/noise.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <fstream>
-#include <string>
-
+#include <cassert>
 #include "callbacks.hpp"
 
 Camera g_camera;
@@ -22,7 +20,7 @@ GLchar *loadShaderSource(const char *file)
     if (!fptr) return NULL;
     fseek(fptr, 0, SEEK_END);
     length = ftell(fptr);
-    buf = (char*)malloc(length + 1);
+    buf = new char[length + 1];
     fseek(fptr, 0, SEEK_SET);
     fread(buf, length, 1, fptr);
     fclose(fptr);
@@ -30,7 +28,7 @@ GLchar *loadShaderSource(const char *file)
     return buf;
 }
 
-void updateWorld(float dt)
+void updateWorld(double dt)
 {
     float moveSpeed = g_camera.speed * dt;
     float phi = glm::radians(g_camera.rotY);
@@ -100,22 +98,6 @@ int main(int argc, char const *argv[])
     g_camera.rotY = 135.0f;
     g_camera.position.y -= 200.0f;
 
-    float *heightmap = new float[WIDTH * HEIGHT * 3];
-    for (size_t i = 0, ix = 0; i < WIDTH; i++) {
-        for (size_t j = 0; j < HEIGHT; j++) {
-            float noise = 0.0f;
-            noise += 0.2f * harmonic2D(3, 5.0f, i, j);
-            noise += harmonic2D(3,  45.0f, i, j);
-            noise += harmonic2D(5, 110.0f, i, j);
-            noise += harmonic2D(5, 220.0f, i, j);
-            noise = glm::max(0.0f, noise);
-
-            heightmap[ix++] = (float)i;
-            heightmap[ix++] = noise;
-            heightmap[ix++] = (float)j;
-        }
-    }
-
     const int numIndices = (WIDTH - 1) * (HEIGHT - 1) * 6;
     GLuint *indices = new GLuint[numIndices];
     for (size_t i = 0, ix = 0; i < WIDTH - 1; i++) {
@@ -129,31 +111,19 @@ int main(int argc, char const *argv[])
         }
     }
 
-    float *normals = new float[WIDTH * HEIGHT * 3];
-    for (size_t i = 0, ix = 0; i < WIDTH * HEIGHT * 3; ) {
-        float x1 = heightmap[i++];
-        float y1 = heightmap[i++];
-        float z1 = heightmap[i++];
-
-        if (i >= WIDTH * HEIGHT * 3) break;
-
-        float x2 = heightmap[i++];
-        float y2 = heightmap[i++];
-        float z2 = heightmap[i++];
-
-        if (i >= WIDTH * HEIGHT * 3) break;
-
-        float x3 = heightmap[i++];
-        float y3 = heightmap[i++];
-        float z3 = heightmap[i++];
-
-        glm::vec3 u(x1, y1, z1);
-        glm::vec3 v(x2, y2, z2);
-        glm::vec3 z(x3, y3, z3);
-        glm::vec3 normal = glm::cross(z - u, z - v);
-        normals[ix++] = normal.x;
-        normals[ix++] = normal.y;
-        normals[ix++] = normal.z;
+    float *heightmap = new float[WIDTH * HEIGHT * 3];
+    for (size_t i = 0, ix = 0; i < WIDTH; i++) {
+        for (size_t j = 0; j < HEIGHT; j++) {
+            float noise = 0.0f;
+            noise += 0.2f * harmonic2D(3, 5.0f, i, j);
+            noise += harmonic2D(3,  45.0f, i, j);
+            noise += harmonic2D(5, 110.0f, i, j);
+            noise += harmonic2D(5, 220.0f, i, j);
+            noise = glm::max(0.0f, noise);
+            heightmap[ix++] = (float)i;
+            heightmap[ix++] = noise;
+            heightmap[ix++] = (float)j;
+        }
     }
 
     // VERTEX ARRAY OBJECT
@@ -177,30 +147,28 @@ int main(int argc, char const *argv[])
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
     delete[] heightmap;
 
-    // NORMAL BUFFER OBJECT
-    GLuint nbo;
-    glGenBuffers(1, &nbo);
-    glBindBuffer(GL_ARRAY_BUFFER, nbo);
-    glBufferData(GL_ARRAY_BUFFER, WIDTH * HEIGHT * 3 * sizeof(float), normals, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    delete[] normals;
-
+    GLint compileStatus;
     GLchar *shaderSource;
 
     // COMPILE VERTEX SHADER
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    shaderSource = loadShaderSource("vertexShader.glsl");
+    shaderSource = loadShaderSource("../shaders/vertexShader.glsl");
     glShaderSource(vertexShader, 1, (const GLchar**)&shaderSource, 0);
-    free(shaderSource);
     glCompileShader(vertexShader);
+    delete[] shaderSource;
+
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &compileStatus);
+    assert(compileStatus);
 
     // COMPILE FRAGMENT SHADER
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    shaderSource = loadShaderSource("fragmentShader.glsl");
+    shaderSource = loadShaderSource("../shaders/fragmentShader.glsl");
     glShaderSource(fragmentShader, 1, (const GLchar**)&shaderSource, 0);
-    free(shaderSource);
     glCompileShader(fragmentShader);
+    delete[] shaderSource;
+
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compileStatus);
+    assert(compileStatus);
 
     // LINK SHADERS
     GLuint shaderProgram = glCreateProgram();
@@ -209,25 +177,22 @@ int main(int argc, char const *argv[])
     glLinkProgram(shaderProgram);
     glUseProgram(shaderProgram);
 
-    GLint logLength;
-    glGetProgramiv(shaderProgram, GL_INFO_LOG_LENGTH, &logLength);
-    GLchar *log = new GLchar[logLength];
-    glGetProgramInfoLog(shaderProgram, logLength, 0, log);
-    printf("%s\n", log);
+    GLint linkStatus, logLength;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &linkStatus);
+    if (!linkStatus) {
+        glGetProgramiv(shaderProgram, GL_INFO_LOG_LENGTH, &logLength);
+        GLchar *log = new GLchar[logLength];
+        glGetProgramInfoLog(shaderProgram, logLength, 0, log);
+        printf("%s\n", log);
+        delete[] log;
+    }
+
+    GLint uModel = glGetUniformLocation(shaderProgram, "uModel");
+    GLint uProj = glGetUniformLocation(shaderProgram, "uProj");
 
     // PROJECTION MATRIX
     glm::mat4 proj = glm::perspective(45.0f, 1.5f, 1.0f, 10000.0f);
-    GLint uProj = glGetUniformLocation(shaderProgram, "uProj");
     glUniformMatrix4fv(uProj, 1.0, GL_FALSE, glm::value_ptr(proj));
-
-    // LIGHTING
-    glm::vec4 diffuseColor(0.6f, 0.8f, 1.0f, 1.0f);
-    GLint uDiffuseColor = glGetUniformLocation(shaderProgram, "uDiffuseColor");
-    glUniform3fv(uDiffuseColor, 1.0, glm::value_ptr(diffuseColor));
-
-    glm::vec3 lightPosition(100.0f, 60.0f, 100.f);
-    GLint uLightPosition = glGetUniformLocation(shaderProgram, "uLightPosition");
-    glUniform3fv(uLightPosition, 1.0, glm::value_ptr(lightPosition));
 
     double lastTime = glfwGetTime();
 
@@ -243,8 +208,7 @@ int main(int argc, char const *argv[])
         model = glm::rotate(model, g_camera.rotX, glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, g_camera.rotY, glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::translate(model, g_camera.position);
-        GLint uModel = glGetUniformLocation(shaderProgram, "uModel");
-        glUniformMatrix4fv(uModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(uModel, 1.0, GL_FALSE, glm::value_ptr(model));
 
         // CLEAR BUFFERS AND RENDER
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -257,11 +221,8 @@ int main(int argc, char const *argv[])
     glDeleteProgram(shaderProgram);
     glDeleteShader(fragmentShader);
     glDeleteShader(vertexShader);
-
     glDeleteBuffers(1, &vbo);
     glDeleteBuffers(1, &ebo);
-    glDeleteBuffers(1, &nbo);
-
     glDeleteVertexArrays(1, &vao);
 
     glfwCloseWindow();
