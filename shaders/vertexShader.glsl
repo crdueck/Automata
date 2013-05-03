@@ -1,15 +1,13 @@
-#version 330
-
-uniform mat4 uProj;
-uniform mat4 uModel;
+#version 400
 
 layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;
 
-out vec4 vColor;
+out vec3 vNormal;
+out vec3 vPosition;
 
 void main()
 {
-    vColor = vec4(0.0, 0.0, position.y, 1.0);
-    gl_Position = vec4(position.x, 10.0 * position.y, position.z, 0.1);
-    gl_Position = uProj * uModel * gl_Position;
+    vNormal = normal;
+    vPosition = position;
 }

@@ -1,19 +1,19 @@
-CC=g++
-CFLAGS=-Wall -O2
+CXX=g++
+CXXFLAGS=-Wall -O2
 LDFLAGS=-lGL -lGLEW -lglfw
 
 SRCDIR=src
-SOURCES=$(SRCDIR)/callbacks.cpp $(SRCDIR)/main.cpp
-OBJECTS=$(SOURCES:.cpp=.o)
+SOURCES=glfwCallbacks.cpp glShaderProgram.cpp glVertexArrayObject.cpp main.cpp
+OBJECTS=$(SOURCES:%.cpp=$(SRCDIR)/%.o)
 EXECUTABLE=automata
 
 $(EXECUTABLE): $(OBJECTS)
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
 
 .cpp.o:
-	$(CC) $(CFLAGS) $< -c -o $@
+	$(CXX) $(CXXFLAGS) -g $< -c -o $@
 
 clean:
-	rm -rf $(SRCDIR)/*.o $(EXECUTABLE)
+	rm -rf $(OBJECTS) $(EXECUTABLE)
 
 .PHONY: clean
