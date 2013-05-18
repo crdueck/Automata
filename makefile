@@ -1,9 +1,9 @@
 CXX=g++
-CXXFLAGS=-Wall -O2
+CXXFLAGS=-Wall -O2 -std=c++11
 LDFLAGS=-lGL -lGLEW -lglfw
 
 SRCDIR=src
-SOURCES=glfwCallbacks.cpp glShaderProgram.cpp glVertexArrayObject.cpp main.cpp
+SOURCES=glfwCallbacks.cpp main.cpp
 OBJECTS=$(SOURCES:%.cpp=$(SRCDIR)/%.o)
 EXECUTABLE=automata
 

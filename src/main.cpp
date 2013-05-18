@@ -3,14 +3,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/noise.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <vector>
 
 #include "glfwCallbacks.h"
 #include "glShaderProgram.hpp"
 #include "glVertexArrayObject.hpp"
 
-bool wireFrame = false;
+// GLOBALS
 Camera g_camera;
 
 GLuint loadTextureTGA(const char *file)
@@ -33,38 +32,41 @@ void updateWorld(const double dt)
 {
     float moveSpeed = g_camera.speed * dt;
     float phi = glm::radians(g_camera.rotY);
+    uint8_t movement = g_camera.movement;
+    uint8_t rotation = g_camera.rotation;
 
-    if (g_camera.movement & MOVE_FORWARD) {
+    if (movement & MOVE_FORWARD) {
         g_camera.position.x -= moveSpeed * sin(phi);
         g_camera.position.z += moveSpeed * cos(phi);
-    } else if (g_camera.movement & MOVE_BACKWARD) {
+    }
+    if (movement & MOVE_BACKWARD) {
         g_camera.position.x += moveSpeed * sin(phi);
         g_camera.position.z -= moveSpeed * cos(phi);
     }
-
-    if (g_camera.movement & MOVE_LEFT) {
+    if (movement & MOVE_LEFT) {
         g_camera.position.x += moveSpeed * cos(phi);
         g_camera.position.z += moveSpeed * sin(phi);
-    } else if (g_camera.movement & MOVE_RIGHT) {
+    }
+    if (movement & MOVE_RIGHT) {
         g_camera.position.x -= moveSpeed * cos(phi);
         g_camera.position.z -= moveSpeed * sin(phi);
     }
-
-    if (g_camera.movement & MOVE_UP) {
+    if (movement & MOVE_UP) {
         g_camera.position.y -= moveSpeed;
-    } else if (g_camera.movement & MOVE_DOWN) {
+    }
+    if (movement & MOVE_DOWN) {
         g_camera.position.y += moveSpeed;
     }
-
-    if (g_camera.rotation & LOOK_LEFT) {
+    if (rotation & LOOK_LEFT) {
         g_camera.rotY -= moveSpeed;
-    } else if (g_camera.rotation & LOOK_RIGHT) {
+    }
+    if (rotation & LOOK_RIGHT) {
         g_camera.rotY += moveSpeed;
     }
-
-    if (g_camera.rotation & LOOK_UP) {
+    if (rotation & LOOK_UP) {
         g_camera.rotX -= moveSpeed;
-    } else if (g_camera.rotation & LOOK_DOWN) {
+    }
+    if (rotation & LOOK_DOWN) {
         g_camera.rotX += moveSpeed;
     }
 }
@@ -109,13 +111,27 @@ int main(int argc, char const *argv[])
     glewInit();
     glInit();
 
-    INIT_CAMERA(g_camera);
     g_camera.rotY = 135.0f;
     g_camera.rotX = 15.0f;
     g_camera.position.y -= 50.0f;
 
     // BIND BUFFER OBJECTS
-    glVertexArrayObject terrain = glVertexArrayObject();
+    glVertexArrayObject terrain;
+
+    const int numIndices = (WIDTH - 1) * (HEIGHT - 1) * 6;
+    std::vector<GLuint> indices;
+    indices.reserve(numIndices);
+    for (size_t i = 0; i < WIDTH - 1; i++) {
+        for (size_t j = 0; j < HEIGHT - 1; j++) {
+            indices.push_back((i + 0) + (j + 0) * WIDTH);
+            indices.push_back((i + 0) + (j + 1) * WIDTH);
+            indices.push_back((i + 1) + (j + 0) * WIDTH);
+            indices.push_back((i + 1) + (j + 0) * WIDTH);
+            indices.push_back((i + 0) + (j + 1) * WIDTH);
+            indices.push_back((i + 1) + (j + 1) * WIDTH);
+        }
+    }
+    terrain.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, numIndices, &indices[0]);
 
     const int numVertices = WIDTH * HEIGHT;
     std::vector<glm::vec3> heightmap;
@@ -135,21 +151,6 @@ int main(int argc, char const *argv[])
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    const int numIndices = (WIDTH - 1) * (HEIGHT - 1) * 6;
-    std::vector<GLuint> indices;
-    indices.reserve(numIndices);
-    for (size_t i = 0; i < WIDTH - 1; i++) {
-        for (size_t j = 0; j < HEIGHT - 1; j++) {
-            indices.push_back((i + 0) + (j + 0) * WIDTH);
-            indices.push_back((i + 0) + (j + 1) * WIDTH);
-            indices.push_back((i + 1) + (j + 0) * WIDTH);
-            indices.push_back((i + 1) + (j + 0) * WIDTH);
-            indices.push_back((i + 0) + (j + 1) * WIDTH);
-            indices.push_back((i + 1) + (j + 1) * WIDTH);
-        }
-    }
-    terrain.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, numIndices, &indices[0]);
-
     std::vector<glm::vec3> normals;
     normals.reserve(numVertices);
     for (std::vector<GLuint>::const_iterator i = indices.begin(); i != indices.end(); std::advance(i, 3)) {
@@ -162,25 +163,27 @@ int main(int argc, char const *argv[])
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+    terrain.bind();
+
     // COMPILE AND LINK SHADERS
-    glShaderProgram shaderProgram = glShaderProgram();
+    glShaderProgram shaderProgram;
     shaderProgram.loadShaderSource(GL_VERTEX_SHADER, "shaders/vertexShader.glsl");
     shaderProgram.loadShaderSource(GL_TESS_CONTROL_SHADER, "shaders/tessControlShader.glsl");
     shaderProgram.loadShaderSource(GL_TESS_EVALUATION_SHADER, "shaders/tessEvalShader.glsl");
     shaderProgram.loadShaderSource(GL_FRAGMENT_SHADER, "shaders/fragmentShader.glsl");
     shaderProgram.link();
-    shaderProgram.bind();
+    shaderProgram.use();
 
     // LIGHTING
     GLint uLightPosition = shaderProgram.getUniformLocation("uLightPosition");
     glUniform3f(uLightPosition, 200.0f, 50.0f, 500.0f);
 
     // TEXTURES
-    GLuint sandTex = loadTextureTGA("textures/grass.tga");
+    //GLuint sandTex = loadTextureTGA("textures/grass.tga");
 
     // PROJECTION MATRIX
     GLint uProj = shaderProgram.getUniformLocation("uProj");
-    glm::mat4 proj = glm::perspective(45.0f, 1.5f, 1.0f, 10000.0f);
+    glm::mat4 proj = glm::perspective(45.0f, 1.5f, 1.0f, 1000.0f);
     glUniformMatrix4fv(uProj, 1.0, GL_FALSE, &proj[0][0]);
 
     GLint uModelView = shaderProgram.getUniformLocation("uModelView");
@@ -202,11 +205,9 @@ int main(int argc, char const *argv[])
 
         // CLEAR BUFFERS AND RENDER
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glPolygonMode(GL_FRONT_AND_BACK, (wireFrame ? GL_LINE : GL_FILL));
-        terrain.bind();
         glDrawElements(GL_PATCHES, numIndices, GL_UNSIGNED_INT, 0);
         glfwSwapBuffers();
-    } while(glfwGetKey(GLFW_KEY_ESC) != GLFW_PRESS);
+    } while (glfwGetKey(GLFW_KEY_ESC) != GLFW_PRESS);
 
     glfwCloseWindow();
     glfwTerminate();
